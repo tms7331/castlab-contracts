@@ -173,8 +173,6 @@ contract ExperimentFunding {
         require(experiment.totalDeposited > 0, "No funds to return");
         require(depositors.length > 0, "Must specify at least one depositor");
 
-        experiment.closed = true;
-
         for (uint256 i = 0; i < depositors.length; i++) {
             address depositor = depositors[i];
             uint256 amount = deposits[experimentId][depositor];
