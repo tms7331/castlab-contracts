@@ -160,7 +160,7 @@ contract ExperimentFunding {
     }
     function adminClose(
         uint256 experimentId
-    ) external onlyAdmin isOpen(experimentId) {
+    ) external onlyAdminPlusDev isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(experiment.totalDeposited == 0, "Must return all funds first");
         experiment.open = false;
@@ -170,7 +170,7 @@ contract ExperimentFunding {
     function adminReturn(
         uint256 experimentId,
         address[] calldata depositors
-    ) external onlyAdmin isOpen(experimentId) {
+    ) external onlyAdminPlusDev isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(experiment.totalDeposited > 0, "No funds to return");
         require(depositors.length > 0, "Must specify at least one depositor");
