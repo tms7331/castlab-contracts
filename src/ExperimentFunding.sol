@@ -14,7 +14,7 @@ interface IERC20 {
 
 contract ExperimentFunding {
     address public immutable admin;
-    address public immutable admin2;
+    address public immutable admin_dev;
     IERC20 public immutable token;
     uint256 public nextExperimentId;
 
@@ -22,9 +22,11 @@ contract ExperimentFunding {
         uint256 costMin;
         uint256 costMax;
         uint256 totalDeposited;
-        // closed can be triggered by the admin in two ways:
-        // close and return funds, or close and withdraw funds
-        bool closed;
+        // open indicates whether deposits/withdrawals are allowed
+        // Admin can close the experiment by setting open to false via:
+        // - adminWithdraw (after withdrawing funds)
+        // - adminClose (after ensuring all funds returned)
+        bool open;
     }
 
     mapping(uint256 => Experiment) public experiments;
@@ -50,28 +52,29 @@ contract ExperimentFunding {
     event AdminClose(uint256 indexed experimentId);
 
     modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin can call this function");
+        _;
+    }
+
+    modifier onlyAdminPlusDev() {
         require(
-            msg.sender == admin || msg.sender == admin2,
-            "Only admin can call this function"
+            msg.sender == admin || msg.sender == admin_dev,
+            "Only admin or admin_dev can call this function"
         );
         _;
     }
 
-    modifier experimentExists(uint256 experimentId) {
-        require(experimentId < nextExperimentId, "Experiment does not exist");
+    modifier isOpen(uint256 experimentId) {
+        require(experiments[experimentId].open, "Experiment is closed");
         _;
     }
 
-    modifier notClosed(uint256 experimentId) {
-        require(!experiments[experimentId].closed, "Experiment is closed");
-        _;
-    }
-
-    constructor(address _admin, address _admin2, address _token) {
+    constructor(address _admin, address _admin_dev, address _token) {
         require(_admin != address(0), "Admin address cannot be zero");
+        require(_admin_dev != address(0), "Admin_dev address cannot be zero");
         require(_token != address(0), "Token address cannot be zero");
         admin = _admin;
-        admin2 = _admin2;
+        admin_dev = _admin_dev;
         token = IERC20(_token);
         nextExperimentId = 0;
     }
@@ -79,7 +82,7 @@ contract ExperimentFunding {
     function createExperiment(
         uint256 costMin,
         uint256 costMax
-    ) external onlyAdmin returns (uint256) {
+    ) external onlyAdminPlusDev returns (uint256) {
         require(costMin > 0, "Minimum cost must be greater than 0");
         require(costMax >= costMin, "Maximum cost must be >= minimum cost");
 
@@ -88,7 +91,7 @@ contract ExperimentFunding {
         newExperiment.costMin = costMin;
         newExperiment.costMax = costMax;
         newExperiment.totalDeposited = 0;
-        newExperiment.closed = false;
+        newExperiment.open = true;
 
         emit ExperimentCreated(experimentId, costMin, costMax);
 
@@ -98,7 +101,8 @@ contract ExperimentFunding {
     function deposit(
         uint256 experimentId,
         uint256 amount
-    ) external experimentExists(experimentId) notClosed(experimentId) {
+    ) external isOpen(experimentId) {
+        // Hardcoding decimals for USDC
         require(amount > 1 * 10 ** 6, "Deposit must be greater than 1 USDC");
 
         Experiment storage experiment = experiments[experimentId];
@@ -118,9 +122,7 @@ contract ExperimentFunding {
         emit Deposited(experimentId, msg.sender, amount);
     }
 
-    function undeposit(
-        uint256 experimentId
-    ) external experimentExists(experimentId) notClosed(experimentId) {
+    function undeposit(uint256 experimentId) external isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(
             deposits[experimentId][msg.sender] > 0,
@@ -138,7 +140,7 @@ contract ExperimentFunding {
 
     function adminWithdraw(
         uint256 experimentId
-    ) external onlyAdmin notClosed(experimentId) {
+    ) external onlyAdmin isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         // Without the > 0 check admin could accidentally close an experiment that doesn't exist yet
         require(experiment.totalDeposited > 0, "No funds to withdraw");
@@ -148,7 +150,7 @@ contract ExperimentFunding {
         );
         uint256 amount = experiment.totalDeposited;
         experiment.totalDeposited = 0;
-        experiment.closed = true;
+        experiment.open = false;
         require(
             token.transfer(admin, amount),
             "Token transfer to admin failed"
@@ -158,17 +160,17 @@ contract ExperimentFunding {
     }
     function adminClose(
         uint256 experimentId
-    ) external onlyAdmin notClosed(experimentId) {
+    ) external onlyAdmin isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(experiment.totalDeposited == 0, "Must return all funds first");
-        experiment.closed = true;
+        experiment.open = false;
         emit AdminClose(experimentId);
     }
 
     function adminReturn(
         uint256 experimentId,
         address[] calldata depositors
-    ) external onlyAdmin notClosed(experimentId) {
+    ) external onlyAdmin isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(experiment.totalDeposited > 0, "No funds to return");
         require(depositors.length > 0, "Must specify at least one depositor");
@@ -195,12 +197,11 @@ contract ExperimentFunding {
     )
         external
         view
-        experimentExists(experimentId)
         returns (
             uint256 costMin,
             uint256 costMax,
             uint256 totalDeposited,
-            bool closed
+            bool open
         )
     {
         Experiment storage experiment = experiments[experimentId];
@@ -208,14 +209,14 @@ contract ExperimentFunding {
             experiment.costMin,
             experiment.costMax,
             experiment.totalDeposited,
-            experiment.closed
+            experiment.open
         );
     }
 
     function getUserDeposit(
         uint256 experimentId,
         address user
-    ) external view experimentExists(experimentId) returns (uint256) {
+    ) external view returns (uint256) {
         return deposits[experimentId][user];
     }
 
