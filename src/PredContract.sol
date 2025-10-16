@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// TODO - need to handle
-
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(
@@ -154,6 +152,7 @@ contract PredMarket {
                     (experiments[experimentId].totalSide0 +
                         experiments[experimentId].totalSide1)) /
                 experiments[experimentId].totalSide0;
+            experiments[experimentId].wagers0[msg.sender] = 0;
         } else if (experiments[experimentId].result == 1) {
             // Side B won
             require(
@@ -165,6 +164,7 @@ contract PredMarket {
                     (experiments[experimentId].totalSide0 +
                         experiments[experimentId].totalSide1)) /
                 experiments[experimentId].totalSide1;
+            experiments[experimentId].wagers1[msg.sender] = 0;
         } else {
             revert("Invalid result");
         }
