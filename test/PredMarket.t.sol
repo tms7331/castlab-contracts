@@ -6,7 +6,7 @@ import "../src/PredContract.sol";
 import "../src/TestToken.sol";
 
 contract PredMarketTest is Test {
-    PredMarket public market;
+    PredictionMarket public market;
     TestToken public token;
     address public admin;
     address public admin_dev;
@@ -44,7 +44,7 @@ contract PredMarketTest is Test {
 
         // Deploy token and market contracts
         token = new TestToken();
-        market = new PredMarket(address(token), admin, admin_dev);
+        market = new PredictionMarket(address(token), admin, admin_dev);
 
         // Get the TestToken admin address
         address tokenAdmin = 0x4611F6d137d1baf545378dD02C1b16eb63cbE755;
@@ -72,7 +72,7 @@ contract PredMarketTest is Test {
     // ========== Constructor Tests ==========
 
     function testConstructorWithValidAddresses() public {
-        PredMarket newMarket = new PredMarket(address(token), admin, admin_dev);
+        PredictionMarket newMarket = new PredictionMarket(address(token), admin, admin_dev);
         assertEq(newMarket.admin(), admin);
         assertEq(newMarket.admin_dev(), admin_dev);
         assertEq(address(newMarket.token()), address(token));
@@ -80,17 +80,17 @@ contract PredMarketTest is Test {
 
     function testConstructorRevertsWithZeroTokenAddress() public {
         vm.expectRevert("Token address cannot be zero");
-        new PredMarket(address(0), admin, admin_dev);
+        new PredictionMarket(address(0), admin, admin_dev);
     }
 
     function testConstructorRevertsWithZeroAdminAddress() public {
         vm.expectRevert("Admin address cannot be zero");
-        new PredMarket(address(token), address(0), admin_dev);
+        new PredictionMarket(address(token), address(0), admin_dev);
     }
 
     function testConstructorRevertsWithZeroAdminDevAddress() public {
         vm.expectRevert("Admin_dev address cannot be zero");
-        new PredMarket(address(token), admin, address(0));
+        new PredictionMarket(address(token), admin, address(0));
     }
 
     // ========== Bet Function Tests ==========
@@ -209,7 +209,7 @@ contract PredMarketTest is Test {
 
         // Close the market
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
@@ -261,7 +261,7 @@ contract PredMarketTest is Test {
         market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         assertEq(market.getExperimentResult(experimentId), 1);
         assertTrue(market.getExperimentComplete(experimentId));
@@ -272,7 +272,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Only admin can call this function");
         vm.prank(user1);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
     }
 
     function testSetResultRevertsForAdminDev() public {
@@ -280,7 +280,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Only admin can call this function");
         vm.prank(admin_dev);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
     }
 
     function testSetResultRevertsOnClosedMarket() public {
@@ -295,12 +295,12 @@ contract PredMarketTest is Test {
 
         // Close the market
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         // Try to set result again
         vm.expectRevert("Experiment is closed");
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
     }
 
     function testSetResultWithDifferentValues() public {
@@ -312,7 +312,7 @@ contract PredMarketTest is Test {
         market.bet(1, 0, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(1, 0);
+        market.adminSetResult(1, 0);
         assertEq(market.getExperimentResult(1), 0);
         assertTrue(market.getExperimentComplete(1));
 
@@ -322,7 +322,7 @@ contract PredMarketTest is Test {
         market.bet(2, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(2, 1);
+        market.adminSetResult(2, 1);
         assertEq(market.getExperimentResult(2), 1);
         assertTrue(market.getExperimentComplete(2));
     }
@@ -334,17 +334,17 @@ contract PredMarketTest is Test {
         // Test that result = 2 is rejected
         vm.expectRevert("Invalid result");
         vm.prank(admin);
-        market.setResult(experimentId, 2);
+        market.adminSetResult(experimentId, 2);
 
         // Test that result = 5 is rejected
         vm.expectRevert("Invalid result");
         vm.prank(admin);
-        market.setResult(experimentId, 5);
+        market.adminSetResult(experimentId, 5);
 
         // Test that result = 255 is rejected
         vm.expectRevert("Invalid result");
         vm.prank(admin);
-        market.setResult(experimentId, 255);
+        market.adminSetResult(experimentId, 255);
     }
 
     // ========== CloseMarket Tests ==========
@@ -354,7 +354,7 @@ contract PredMarketTest is Test {
         createExperiment(experimentId);
 
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         assertTrue(market.getExperimentComplete(experimentId));
     }
@@ -371,7 +371,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Funds not returned");
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
     }
 
     function testCloseMarketRevertsWithFundsOnSide1() public {
@@ -386,7 +386,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Funds not returned");
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
     }
 
     function testCloseMarketRevertsForNonAdmin() public {
@@ -394,7 +394,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Only admin can call this function");
         vm.prank(user1);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
     }
 
     function testCloseMarketRevertsForAdminDev() public {
@@ -402,7 +402,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Only admin can call this function");
         vm.prank(admin_dev);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
     }
 
     function testCloseMarketRevertsOnAlreadyClosed() public {
@@ -410,11 +410,11 @@ contract PredMarketTest is Test {
         createExperiment(experimentId);
 
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         vm.expectRevert("Experiment is closed");
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
     }
 
     // ========== Refund Tests ==========
@@ -443,7 +443,7 @@ contract PredMarketTest is Test {
         uint256 user2BalanceBefore = token.balanceOf(user2);
 
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         // Check balances increased (note: there's a bug in the contract - wagers are zeroed before transfer)
         // The test will reveal this bug
@@ -466,7 +466,7 @@ contract PredMarketTest is Test {
         uint256 balanceBefore = token.balanceOf(user1);
 
         vm.prank(admin_dev);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         assertEq(token.balanceOf(user1), balanceBefore + 100 * 10 ** 6);
     }
@@ -479,7 +479,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Only admin or admin_dev can call this function");
         vm.prank(user1);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
     }
 
     function testRefundRevertsOnClosedMarket() public {
@@ -492,14 +492,14 @@ contract PredMarketTest is Test {
         market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         address[] memory users = new address[](1);
         users[0] = user1;
 
         vm.expectRevert("Experiment is closed");
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
     }
 
     function testRefundRevertsWithEmptyUserList() public {
@@ -510,7 +510,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Must specify at least one user");
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
     }
 
     function testRefundClearsTotals() public {
@@ -533,7 +533,7 @@ contract PredMarketTest is Test {
         users[1] = user2;
 
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         (uint256 total0, uint256 total1) = market.getExperimentTotals(
             experimentId
@@ -575,7 +575,7 @@ contract PredMarketTest is Test {
 
         // Set result to side 1 wins
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         uint256 balanceBefore = token.balanceOf(user2);
 
@@ -610,7 +610,7 @@ contract PredMarketTest is Test {
 
         // Set result to side 1 wins (using 1 instead of 0 due to contract bug)
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         uint256 user1BalanceBefore = token.balanceOf(user1);
         uint256 user2BalanceBefore = token.balanceOf(user2);
@@ -653,12 +653,12 @@ contract PredMarketTest is Test {
         address[] memory users = new address[](1);
         users[0] = user1;
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         // Close market without setting explicit result (result defaults to 0)
         // Since result = 0 is now valid (side 0 wins), the market is treated as resolved
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         // User1 tries to claim but their wager was refunded (set to 0)
         // Result = 0 means side 0 wins, but user has no wager anymore
@@ -685,7 +685,7 @@ contract PredMarketTest is Test {
 
         // Set result to side 1 wins
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         // User1 tries to claim but lost
         vm.expectRevert("No winning wager");
@@ -705,7 +705,7 @@ contract PredMarketTest is Test {
 
         // Set result to side 1 wins (using 1 instead of 0 due to contract bug)
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         // User3 tries to claim but didn't participate
         vm.expectRevert("No winning wager");
@@ -732,7 +732,7 @@ contract PredMarketTest is Test {
         // This should now be prevented by our validation
         vm.expectRevert("Winning side has no bets");
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
     }
 
     // ========== View Function Tests ==========
@@ -749,7 +749,7 @@ contract PredMarketTest is Test {
         market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         assertTrue(market.getExperimentComplete(experimentId));
     }
@@ -766,7 +766,7 @@ contract PredMarketTest is Test {
         market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         assertEq(market.getExperimentResult(experimentId), 1);
     }
@@ -869,7 +869,7 @@ contract PredMarketTest is Test {
 
         // Side 1 wins
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
 
         uint256 user1BalanceBefore = token.balanceOf(user1);
         uint256 user2BalanceBefore = token.balanceOf(user2);
@@ -905,11 +905,11 @@ contract PredMarketTest is Test {
         users[1] = user2;
 
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         // Now close the market
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         assertTrue(market.getExperimentComplete(experimentId));
     }
@@ -957,7 +957,7 @@ contract PredMarketTest is Test {
         users[1] = user3;
 
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         (uint256 wager0_user1, ) = market.getUserWagers(experimentId, user1);
         assertEq(wager0_user1, 0);
@@ -1023,7 +1023,7 @@ contract PredMarketTest is Test {
 
         vm.expectRevert("Experiment doesn't exist");
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
     }
 
     function testClaimWinningsRevertsOnNonExistentExperiment() public {
@@ -1081,7 +1081,7 @@ contract PredMarketTest is Test {
         // Try to set side 1 as winner (but no one bet on side 1)
         vm.expectRevert("Winning side has no bets");
         vm.prank(admin);
-        market.setResult(experimentId, 1);
+        market.adminSetResult(experimentId, 1);
     }
 
     function testSetResultSucceedsWhenWinningSideHasBets() public {
@@ -1103,7 +1103,7 @@ contract PredMarketTest is Test {
 
         // Setting side 0 as winner should succeed
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
 
         assertEq(market.getExperimentResult(experimentId), 0);
         assertTrue(market.getExperimentComplete(experimentId));
@@ -1130,7 +1130,7 @@ contract PredMarketTest is Test {
 
         // Side 0 wins
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
 
         // User1 claims once
         vm.prank(user1);
@@ -1167,7 +1167,7 @@ contract PredMarketTest is Test {
 
         // Side 0 wins
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
 
         uint256 user1BalanceBefore = token.balanceOf(user1);
         uint256 user2BalanceBefore = token.balanceOf(user2);
@@ -1205,7 +1205,7 @@ contract PredMarketTest is Test {
         market.bet(experimentId, 1, 50 * 10 ** 6);
 
         vm.prank(admin);
-        market.setResult(experimentId, 0);
+        market.adminSetResult(experimentId, 0);
 
         // Verify wager before claim
         (uint256 wager0Before, ) = market.getUserWagers(experimentId, user1);
@@ -1272,17 +1272,17 @@ contract PredMarketTest is Test {
         // Cannot close with funds still in market
         vm.expectRevert("Funds not returned");
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         // Refund user
         address[] memory users = new address[](1);
         users[0] = user1;
         vm.prank(admin);
-        market.refund(experimentId, users);
+        market.adminRefund(experimentId, users);
 
         // Now close should succeed
         vm.prank(admin);
-        market.closeMarket(experimentId);
+        market.adminCloseMarket(experimentId);
 
         assertTrue(market.getExperimentComplete(experimentId));
     }

@@ -13,10 +13,10 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-/// @title PredMarket - Prediction Market for Binary Experiment Outcomes
+/// @title PredictionMarket - Prediction Market for Binary Experiment Outcomes
 /// @notice This contract allows users to bet on binary outcomes of experiments using ERC20 tokens
 /// @dev Designed for use with USDC token. Winners receive proportional payouts from the total pool
-contract PredMarket {
+contract PredictionMarket {
     /// @notice Experiment data structure containing all market information
     /// @dev Uses mappings for wagers, cannot be returned directly by public getter
     struct Experiment {
@@ -145,17 +145,17 @@ contract PredMarket {
 
     /// @notice Sets the result of an experiment, determining the winning side
     /// @param experimentId The unique identifier for the experiment
-    /// @param _result The outcome (0 = side 0 won, 1 = side 1 won)
+    /// @param result The outcome (0 = side 0 won, 1 = side 1 won)
     /// @dev Only admin can call. Validates that winning side has bets to prevent fund lockup
     /// @dev Once set, the experiment is marked complete and betting is closed
-    function setResult(
+    function adminSetResult(
         uint256 experimentId,
-        uint8 _result
+        uint8 result
     ) public onlyAdmin validExperiment(experimentId) isOpen(experimentId) {
-        require(_result == 0 || _result == 1, "Invalid result");
+        require(result == 0 || result == 1, "Invalid result");
 
         // Prevent setting a result where winning side has no bets
-        if (_result == 0) {
+        if (result == 0) {
             require(
                 experiments[experimentId].totalSide0 > 0,
                 "Winning side has no bets"
@@ -167,16 +167,16 @@ contract PredMarket {
             );
         }
 
-        experiments[experimentId].result = _result;
+        experiments[experimentId].result = result;
         experiments[experimentId].complete = true;
-        emit ExperimentResultSet(experimentId, _result);
+        emit ExperimentResultSet(experimentId, result);
     }
 
     /// @notice Closes a market without setting a result (used after full refund)
     /// @param experimentId The unique identifier for the experiment
     /// @dev Only admin can call. Requires all funds to be refunded first (totals = 0)
-    /// @dev This is an alternative to setResult when the experiment is cancelled
-    function closeMarket(
+    /// @dev This is an alternative to adminSetResult when the experiment is cancelled
+    function adminCloseMarket(
         uint256 experimentId
     ) public onlyAdmin validExperiment(experimentId) isOpen(experimentId) {
         // Make sure all funds have been returned!
@@ -194,26 +194,26 @@ contract PredMarket {
 
     /// @notice Refunds users' wagers, typically when an experiment is cancelled
     /// @param experimentId The unique identifier for the experiment
-    /// @param _users Array of user addresses to refund
+    /// @param users Array of user addresses to refund
     /// @dev Can be called by admin or admin_dev. Processes refunds in batches
     /// @dev Returns both side 0 and side 1 wagers to each user, updates totals
-    function refund(
+    function adminRefund(
         uint256 experimentId,
-        address[] calldata _users
+        address[] calldata users
     ) public onlyAdminPlusDev validExperiment(experimentId) isOpen(experimentId) {
-        require(_users.length > 0, "Must specify at least one user");
-        for (uint256 i = 0; i < _users.length; i++) {
+        require(users.length > 0, "Must specify at least one user");
+        for (uint256 i = 0; i < users.length; i++) {
             uint256 refundAmount = experiments[experimentId].wagers0[
-                _users[i]
-            ] + experiments[experimentId].wagers1[_users[i]];
+                users[i]
+            ] + experiments[experimentId].wagers1[users[i]];
             experiments[experimentId].totalSide0 -= experiments[experimentId]
-                .wagers0[_users[i]];
+                .wagers0[users[i]];
             experiments[experimentId].totalSide1 -= experiments[experimentId]
-                .wagers1[_users[i]];
-            experiments[experimentId].wagers0[_users[i]] = 0;
-            experiments[experimentId].wagers1[_users[i]] = 0;
-            token.transfer(_users[i], refundAmount);
-            emit UserRefunded(experimentId, _users[i], refundAmount);
+                .wagers1[users[i]];
+            experiments[experimentId].wagers0[users[i]] = 0;
+            experiments[experimentId].wagers1[users[i]] = 0;
+            token.transfer(users[i], refundAmount);
+            emit UserRefunded(experimentId, users[i], refundAmount);
         }
     }
 
