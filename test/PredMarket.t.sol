@@ -63,6 +63,12 @@ contract PredMarketTest is Test {
         token.transfer(address(market), INITIAL_BALANCE); // For refund tests
     }
 
+    // Helper function to create experiment
+    function createExperiment(uint256 experimentId) internal {
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+    }
+
     // ========== Constructor Tests ==========
 
     function testConstructorWithValidAddresses() public {
@@ -93,6 +99,9 @@ contract PredMarketTest is Test {
         uint256 experimentId = 1;
         uint256 betAmount = 100 * 10 ** 6;
 
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
         vm.prank(user1);
         token.approve(address(market), betAmount);
 
@@ -117,6 +126,9 @@ contract PredMarketTest is Test {
         uint256 experimentId = 1;
         uint256 betAmount = 150 * 10 ** 6;
 
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
         vm.prank(user1);
         token.approve(address(market), betAmount);
 
@@ -139,6 +151,7 @@ contract PredMarketTest is Test {
 
     function testBetMultipleTimes() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(user1);
         token.approve(address(market), INITIAL_BALANCE);
@@ -165,6 +178,7 @@ contract PredMarketTest is Test {
 
     function testBetRevertsWithInvalidOutcome() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
@@ -176,14 +190,22 @@ contract PredMarketTest is Test {
 
     function testBetRevertsWithZeroAmount() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
-        vm.expectRevert("Amount must be greater than 0");
+        vm.expectRevert("Amount below minimum bet");
         vm.prank(user1);
         market.bet(experimentId, 0, 0);
     }
 
     function testBetRevertsOnClosedMarket() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
+
+        // Place a bet so we can close the market
+        vm.prank(user2);
+        token.approve(address(market), 50 * 10 ** 6);
+        vm.prank(user2);
+        market.bet(experimentId, 1, 50 * 10 ** 6);
 
         // Close the market
         vm.prank(admin);
@@ -199,6 +221,7 @@ contract PredMarketTest is Test {
 
     function testBetMultipleUsers() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets on side 0
         vm.prank(user1);
@@ -229,6 +252,13 @@ contract PredMarketTest is Test {
 
     function testSetResultByAdmin() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
+
+        // Need at least one bet on side 1 to set it as winner
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
         market.setResult(experimentId, 1);
@@ -255,6 +285,13 @@ contract PredMarketTest is Test {
 
     function testSetResultRevertsOnClosedMarket() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
+
+        // Need at least one bet on side 1 to set it as winner
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 1, 100 * 10 ** 6);
 
         // Close the market
         vm.prank(admin);
@@ -268,12 +305,22 @@ contract PredMarketTest is Test {
 
     function testSetResultWithDifferentValues() public {
         // Test result = 0 (side 0 wins)
+        createExperiment(1);
+        vm.prank(user1);
+        token.approve(address(market), 200 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(1, 0, 100 * 10 ** 6);
+
         vm.prank(admin);
         market.setResult(1, 0);
         assertEq(market.getExperimentResult(1), 0);
         assertTrue(market.getExperimentComplete(1));
 
         // Test result = 1 (side 1 wins)
+        createExperiment(2);
+        vm.prank(user1);
+        market.bet(2, 1, 100 * 10 ** 6);
+
         vm.prank(admin);
         market.setResult(2, 1);
         assertEq(market.getExperimentResult(2), 1);
@@ -282,6 +329,7 @@ contract PredMarketTest is Test {
 
     function testSetResultRevertsForInvalidValues() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Test that result = 2 is rejected
         vm.expectRevert("Invalid result");
@@ -303,6 +351,7 @@ contract PredMarketTest is Test {
 
     function testCloseMarketWithZeroFunds() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(admin);
         market.closeMarket(experimentId);
@@ -312,6 +361,7 @@ contract PredMarketTest is Test {
 
     function testCloseMarketRevertsWithFundsOnSide0() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Place bet on side 0
         vm.prank(user1);
@@ -326,6 +376,7 @@ contract PredMarketTest is Test {
 
     function testCloseMarketRevertsWithFundsOnSide1() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Place bet on side 1
         vm.prank(user1);
@@ -356,6 +407,7 @@ contract PredMarketTest is Test {
 
     function testCloseMarketRevertsOnAlreadyClosed() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(admin);
         market.closeMarket(experimentId);
@@ -369,6 +421,7 @@ contract PredMarketTest is Test {
 
     function testRefundByAdmin() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets on side 0
         vm.prank(user1);
@@ -400,6 +453,7 @@ contract PredMarketTest is Test {
 
     function testRefundByAdminDev() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
@@ -430,6 +484,12 @@ contract PredMarketTest is Test {
 
     function testRefundRevertsOnClosedMarket() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
         market.setResult(experimentId, 1);
@@ -444,6 +504,7 @@ contract PredMarketTest is Test {
 
     function testRefundRevertsWithEmptyUserList() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         address[] memory users = new address[](0);
 
@@ -454,6 +515,7 @@ contract PredMarketTest is Test {
 
     function testRefundClearsTotals() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Multiple users bet
         vm.prank(user1);
@@ -497,6 +559,7 @@ contract PredMarketTest is Test {
     // ========== ClaimWinnings Tests ==========
     function testClaimWinningsSide1Wins() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets 100 on side 0
         vm.prank(user1);
@@ -525,6 +588,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsProportionalDistribution() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets 200 on side 1
         vm.prank(user1);
@@ -564,6 +628,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsRevertsForIncompleteMarket() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
@@ -577,6 +642,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsRevertsWhenRefunded() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
@@ -603,6 +669,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsRevertsForLoser() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets on side 0
         vm.prank(user1);
@@ -628,6 +695,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsRevertsForNonParticipant() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // User1 bets on side 1
         vm.prank(user1);
@@ -647,6 +715,7 @@ contract PredMarketTest is Test {
 
     function testClaimWinningsWithNoBetsOnWinningSide() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Both users bet on side 0
         vm.prank(user1);
@@ -659,27 +728,25 @@ contract PredMarketTest is Test {
         vm.prank(user2);
         market.bet(experimentId, 0, 50 * 10 ** 6);
 
-        // Set result to side 1 wins (but nobody bet on side 1)
+        // Try to set result to side 1 wins (but nobody bet on side 1)
+        // This should now be prevented by our validation
+        vm.expectRevert("Winning side has no bets");
         vm.prank(admin);
         market.setResult(experimentId, 1);
-
-        // User1 tries to claim but bet on losing side
-        vm.expectRevert("No winning wager");
-        vm.prank(user1);
-        market.claimWinnings(experimentId);
-
-        // User2 also can't claim
-        vm.expectRevert("No winning wager");
-        vm.prank(user2);
-        market.claimWinnings(experimentId);
     }
 
     // ========== View Function Tests ==========
 
     function testGetExperimentComplete() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         assertFalse(market.getExperimentComplete(experimentId));
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
         market.setResult(experimentId, 1);
@@ -689,8 +756,14 @@ contract PredMarketTest is Test {
 
     function testGetExperimentResult() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         assertEq(market.getExperimentResult(experimentId), 0);
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 1, 100 * 10 ** 6);
 
         vm.prank(admin);
         market.setResult(experimentId, 1);
@@ -700,6 +773,7 @@ contract PredMarketTest is Test {
 
     function testGetExperimentTotals() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         (uint256 total0, uint256 total1) = market.getExperimentTotals(
             experimentId
@@ -723,6 +797,7 @@ contract PredMarketTest is Test {
 
     function testGetUserWagers() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         (uint256 wager0, uint256 wager1) = market.getUserWagers(
             experimentId,
@@ -748,6 +823,10 @@ contract PredMarketTest is Test {
     // ========== Edge Case Tests ==========
 
     function testMultipleExperimentsIndependent() public {
+        // Create both experiments
+        createExperiment(1);
+        createExperiment(2);
+
         // Experiment 1
         vm.prank(user1);
         token.approve(address(market), 500 * 10 ** 6);
@@ -775,8 +854,9 @@ contract PredMarketTest is Test {
 
     function testOneSidedBetting() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
-        // Only bets on side 1 (using 1 instead of 0 due to contract bug)
+        // Only bets on side 1
         vm.prank(user1);
         token.approve(address(market), 100 * 10 ** 6);
         vm.prank(user1);
@@ -806,6 +886,7 @@ contract PredMarketTest is Test {
 
     function testCloseMarketAfterRefund() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Users bet
         vm.prank(user1);
@@ -835,6 +916,8 @@ contract PredMarketTest is Test {
 
     function testBetWithExactTokenBalance() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
+
         uint256 balance = token.balanceOf(user1);
 
         vm.prank(user1);
@@ -850,6 +933,7 @@ contract PredMarketTest is Test {
 
     function testPartialRefund() public {
         uint256 experimentId = 1;
+        createExperiment(experimentId);
 
         // Three users bet
         vm.prank(user1);
@@ -890,5 +974,316 @@ contract PredMarketTest is Test {
         );
         assertEq(total0, 0);
         assertEq(total1, 150 * 10 ** 6);
+    }
+
+    // ========== New Feature Tests ==========
+
+    // Test experiment creation and validation
+    function testCreateExperiment() public {
+        uint256 experimentId = 100;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        assertTrue(market.experimentExists(experimentId));
+    }
+
+    function testCreateExperimentRevertsForNonAdmin() public {
+        uint256 experimentId = 100;
+
+        vm.expectRevert("Only admin can call this function");
+        vm.prank(user1);
+        market.createExperiment(experimentId);
+    }
+
+    function testCreateExperimentRevertsIfAlreadyExists() public {
+        uint256 experimentId = 100;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        vm.expectRevert("Experiment already exists");
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+    }
+
+    function testBetRevertsOnNonExistentExperiment() public {
+        uint256 experimentId = 999;
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+
+        vm.expectRevert("Experiment doesn't exist");
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+    }
+
+    function testSetResultRevertsOnNonExistentExperiment() public {
+        uint256 experimentId = 999;
+
+        vm.expectRevert("Experiment doesn't exist");
+        vm.prank(admin);
+        market.setResult(experimentId, 0);
+    }
+
+    function testClaimWinningsRevertsOnNonExistentExperiment() public {
+        uint256 experimentId = 999;
+
+        vm.expectRevert("Experiment doesn't exist");
+        vm.prank(user1);
+        market.claimWinnings(experimentId);
+    }
+
+    // Test minimum bet amount
+    function testBetRevertsWhenBelowMinimum() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        vm.prank(user1);
+        token.approve(address(market), 1e6 - 1);
+
+        vm.expectRevert("Amount below minimum bet");
+        vm.prank(user1);
+        market.bet(experimentId, 0, 1e6 - 1); // Just below 1 USDC
+    }
+
+    function testBetAcceptsExactlyMinimum() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        vm.prank(user1);
+        token.approve(address(market), 1e6);
+
+        vm.prank(user1);
+        market.bet(experimentId, 0, 1e6); // Exactly 1 USDC
+
+        (uint256 wager0, ) = market.getUserWagers(experimentId, user1);
+        assertEq(wager0, 1e6);
+    }
+
+    // Test setting result when winning side has no bets
+    function testSetResultRevertsWhenWinningSideHasNoBets() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        // Only user1 bets on side 0
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        // Try to set side 1 as winner (but no one bet on side 1)
+        vm.expectRevert("Winning side has no bets");
+        vm.prank(admin);
+        market.setResult(experimentId, 1);
+    }
+
+    function testSetResultSucceedsWhenWinningSideHasBets() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        // Users bet on both sides
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(market), 50 * 10 ** 6);
+        vm.prank(user2);
+        market.bet(experimentId, 1, 50 * 10 ** 6);
+
+        // Setting side 0 as winner should succeed
+        vm.prank(admin);
+        market.setResult(experimentId, 0);
+
+        assertEq(market.getExperimentResult(experimentId), 0);
+        assertTrue(market.getExperimentComplete(experimentId));
+    }
+
+    // Test double-claiming protection
+    function testCannotClaimTwice() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        // User1 bets on side 0
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        // User2 bets on side 1
+        vm.prank(user2);
+        token.approve(address(market), 50 * 10 ** 6);
+        vm.prank(user2);
+        market.bet(experimentId, 1, 50 * 10 ** 6);
+
+        // Side 0 wins
+        vm.prank(admin);
+        market.setResult(experimentId, 0);
+
+        // User1 claims once
+        vm.prank(user1);
+        market.claimWinnings(experimentId);
+
+        // User1 tries to claim again
+        vm.expectRevert("No winning wager");
+        vm.prank(user1);
+        market.claimWinnings(experimentId);
+    }
+
+    // Test everyone bets on one side and that side wins
+    function testEveryoneOnWinningSide() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        // Everyone bets on side 0
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(market), 50 * 10 ** 6);
+        vm.prank(user2);
+        market.bet(experimentId, 0, 50 * 10 ** 6);
+
+        vm.prank(user3);
+        token.approve(address(market), 75 * 10 ** 6);
+        vm.prank(user3);
+        market.bet(experimentId, 0, 75 * 10 ** 6);
+
+        // Side 0 wins
+        vm.prank(admin);
+        market.setResult(experimentId, 0);
+
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        uint256 user2BalanceBefore = token.balanceOf(user2);
+        uint256 user3BalanceBefore = token.balanceOf(user3);
+
+        // Each user gets back their original wager (100% of their bet)
+        vm.prank(user1);
+        market.claimWinnings(experimentId);
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 100 * 10 ** 6);
+
+        vm.prank(user2);
+        market.claimWinnings(experimentId);
+        assertEq(token.balanceOf(user2), user2BalanceBefore + 50 * 10 ** 6);
+
+        vm.prank(user3);
+        market.claimWinnings(experimentId);
+        assertEq(token.balanceOf(user3), user3BalanceBefore + 75 * 10 ** 6);
+    }
+
+    // Test wager zeroing after claiming
+    function testWagerZeroedAfterClaim() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(market), 50 * 10 ** 6);
+        vm.prank(user2);
+        market.bet(experimentId, 1, 50 * 10 ** 6);
+
+        vm.prank(admin);
+        market.setResult(experimentId, 0);
+
+        // Verify wager before claim
+        (uint256 wager0Before, ) = market.getUserWagers(experimentId, user1);
+        assertEq(wager0Before, 100 * 10 ** 6);
+
+        // Claim winnings
+        vm.prank(user1);
+        market.claimWinnings(experimentId);
+
+        // Verify wager is zeroed after claim
+        (uint256 wager0After, ) = market.getUserWagers(experimentId, user1);
+        assertEq(wager0After, 0);
+    }
+
+    // Test multiple experiments with experiment validation
+    function testMultipleExperimentsWithValidation() public {
+        uint256 exp1 = 1;
+        uint256 exp2 = 2;
+
+        // Create both experiments
+        vm.prank(admin);
+        market.createExperiment(exp1);
+        vm.prank(admin);
+        market.createExperiment(exp2);
+
+        // Bet on experiment 1
+        vm.prank(user1);
+        token.approve(address(market), 200 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(exp1, 0, 100 * 10 ** 6);
+
+        // Bet on experiment 2
+        vm.prank(user1);
+        market.bet(exp2, 1, 100 * 10 ** 6);
+
+        // Verify independent tracking
+        (uint256 wager0_exp1, uint256 wager1_exp1) = market.getUserWagers(
+            exp1,
+            user1
+        );
+        assertEq(wager0_exp1, 100 * 10 ** 6);
+        assertEq(wager1_exp1, 0);
+
+        (uint256 wager0_exp2, uint256 wager1_exp2) = market.getUserWagers(
+            exp2,
+            user1
+        );
+        assertEq(wager0_exp2, 0);
+        assertEq(wager1_exp2, 100 * 10 ** 6);
+    }
+
+    // Test close market requires no funds
+    function testCloseMarketValidatesNoFunds() public {
+        uint256 experimentId = 1;
+
+        vm.prank(admin);
+        market.createExperiment(experimentId);
+
+        vm.prank(user1);
+        token.approve(address(market), 100 * 10 ** 6);
+        vm.prank(user1);
+        market.bet(experimentId, 0, 100 * 10 ** 6);
+
+        // Cannot close with funds still in market
+        vm.expectRevert("Funds not returned");
+        vm.prank(admin);
+        market.closeMarket(experimentId);
+
+        // Refund user
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        vm.prank(admin);
+        market.refund(experimentId, users);
+
+        // Now close should succeed
+        vm.prank(admin);
+        market.closeMarket(experimentId);
+
+        assertTrue(market.getExperimentComplete(experimentId));
     }
 }
