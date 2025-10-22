@@ -80,25 +80,6 @@ contract ExperimentFunding {
         nextExperimentId = 0;
     }
 
-    function createExperiment(
-        uint256 costMin,
-        uint256 costMax
-    ) external onlyAdminPlusDev returns (uint256) {
-        require(costMin > 0, "Minimum cost must be greater than 0");
-        require(costMax >= costMin, "Maximum cost must be >= minimum cost");
-
-        uint256 experimentId = nextExperimentId++;
-        Experiment storage newExperiment = experiments[experimentId];
-        newExperiment.costMin = costMin;
-        newExperiment.costMax = costMax;
-        newExperiment.totalDeposited = 0;
-        newExperiment.open = true;
-
-        emit ExperimentCreated(experimentId, costMin, costMax);
-
-        return experimentId;
-    }
-
     function deposit(
         uint256 experimentId,
         uint256 amount
@@ -123,7 +104,7 @@ contract ExperimentFunding {
         emit Deposited(experimentId, msg.sender, amount);
     }
 
-    function undeposit(uint256 experimentId) external isOpen(experimentId) {
+    function userUndeposit(uint256 experimentId) external isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
         require(
             deposits[experimentId][msg.sender] > 0,
@@ -137,6 +118,36 @@ contract ExperimentFunding {
         require(token.transfer(msg.sender, amount), "Token transfer failed");
 
         emit Undeposited(experimentId, msg.sender, amount);
+    }
+
+    function userUnbet(uint256 experimentId) external {
+        // TODO: Implement - allow unbetting after 30 days if no result set
+    }
+
+    function userClaimBetProfit(uint256 experimentId) external {
+        // TODO: Implement - claim winnings when result is set
+    }
+
+    function adminCreateExperiment(
+        uint256 costMin,
+        uint256 costMax
+    ) external onlyAdminPlusDev returns (uint256) {
+        require(costMin > 0, "Minimum cost must be greater than 0");
+        require(costMax >= costMin, "Maximum cost must be >= minimum cost");
+
+        uint256 experimentId = nextExperimentId++;
+        Experiment storage newExperiment = experiments[experimentId];
+        newExperiment.costMin = costMin;
+        newExperiment.costMax = costMax;
+        newExperiment.totalDeposited = 0;
+        newExperiment.totalBet0 = 0;
+        newExperiment.totalBet1 = 0;
+        newExperiment.bettingOutcome = 255;
+        newExperiment.experimentCreatedAt = block.timestamp;
+        newExperiment.open = true;
+
+        emit ExperimentCreated(experimentId, costMin, costMax);
+        return experimentId;
     }
 
     function adminWithdraw(
@@ -168,7 +179,7 @@ contract ExperimentFunding {
         emit AdminClose(experimentId);
     }
 
-    function adminReturn(
+    function adminRefund(
         uint256 experimentId,
         address[] calldata depositors
     ) external onlyAdminPlusDev isOpen(experimentId) {
@@ -191,6 +202,26 @@ contract ExperimentFunding {
                 emit Undeposited(experimentId, depositor, amount);
             }
         }
+    }
+
+    function adminReturnBet(
+        uint256 experimentId,
+        address[] calldata users
+    ) external onlyAdminPlusDev isOpen(experimentId) {
+        // TODO: Implement - return bets to users
+    }
+
+    function adminCloseMarket(
+        uint256 experimentId
+    ) external onlyAdmin isOpen(experimentId) {
+        // TODO: Implement - close market early, return all deposits AND bets
+    }
+
+    function adminSetResult(
+        uint256 experimentId,
+        uint8 result
+    ) external onlyAdmin {
+        // TODO: Implement - set bettingOutcome to 0 or 1
     }
 
     function getExperimentInfo(
