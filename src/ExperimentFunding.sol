@@ -121,11 +121,48 @@ contract ExperimentFunding {
     }
 
     function userUnbet(uint256 experimentId) external {
-        // TODO: Implement - allow unbetting after 30 days if no result set
+        Experiment storage experiment = experiments[experimentId];
+        require(
+            block.timestamp >= experiment.experimentCreatedAt + 30 days,
+            "Must wait 30 days"
+        );
+        require(experiment.bettingOutcome == 255, "Result already set");
+
+        uint256 amount0 = bets0[experimentId][msg.sender];
+        uint256 amount1 = bets1[experimentId][msg.sender];
+        uint256 total = amount0 + amount1;
+        require(total > 0, "No bets to withdraw");
+
+        bets0[experimentId][msg.sender] = 0;
+        bets1[experimentId][msg.sender] = 0;
+        experiment.totalBet0 -= amount0;
+        experiment.totalBet1 -= amount1;
+
+        require(token.transfer(msg.sender, total), "Transfer failed");
     }
 
     function userClaimBetProfit(uint256 experimentId) external {
-        // TODO: Implement - claim winnings when result is set
+        Experiment storage experiment = experiments[experimentId];
+        require(experiment.bettingOutcome != 255, "Result not set");
+
+        uint256 payout;
+        if (experiment.bettingOutcome == 0) {
+            uint256 userBet = bets0[experimentId][msg.sender];
+            require(userBet > 0, "No winning bet");
+            payout =
+                (userBet * (experiment.totalBet0 + experiment.totalBet1)) /
+                experiment.totalBet0;
+            bets0[experimentId][msg.sender] = 0;
+        } else {
+            uint256 userBet = bets1[experimentId][msg.sender];
+            require(userBet > 0, "No winning bet");
+            payout =
+                (userBet * (experiment.totalBet0 + experiment.totalBet1)) /
+                experiment.totalBet1;
+            bets1[experimentId][msg.sender] = 0;
+        }
+
+        require(token.transfer(msg.sender, payout), "Transfer failed");
     }
 
     function adminCreateExperiment(
@@ -208,20 +245,58 @@ contract ExperimentFunding {
         uint256 experimentId,
         address[] calldata users
     ) external onlyAdminPlusDev isOpen(experimentId) {
-        // TODO: Implement - return bets to users
+        Experiment storage experiment = experiments[experimentId];
+        require(users.length > 0, "Must specify at least one user");
+
+        for (uint256 i = 0; i < users.length; i++) {
+            uint256 amount0 = bets0[experimentId][users[i]];
+            uint256 amount1 = bets1[experimentId][users[i]];
+            uint256 total = amount0 + amount1;
+
+            if (total > 0) {
+                bets0[experimentId][users[i]] = 0;
+                bets1[experimentId][users[i]] = 0;
+                experiment.totalBet0 -= amount0;
+                experiment.totalBet1 -= amount1;
+                require(token.transfer(users[i], total), "Transfer failed");
+            }
+        }
     }
 
     function adminCloseMarket(
         uint256 experimentId
     ) external onlyAdmin isOpen(experimentId) {
-        // TODO: Implement - close market early, return all deposits AND bets
+        Experiment storage experiment = experiments[experimentId];
+        require(
+            experiment.totalDeposited == 0,
+            "Must return all deposits first"
+        );
+        require(
+            experiment.totalBet0 == 0 && experiment.totalBet1 == 0,
+            "Must return all bets first"
+        );
+        experiment.open = false;
     }
 
     function adminSetResult(
         uint256 experimentId,
         uint8 result
     ) external onlyAdmin {
-        // TODO: Implement - set bettingOutcome to 0 or 1
+        Experiment storage experiment = experiments[experimentId];
+        require(experiment.bettingOutcome == 255, "Result already set");
+        require(result == 0 || result == 1, "Invalid result");
+        require(
+            experiment.totalBet0 > 0 || experiment.totalBet1 > 0,
+            "No bets placed"
+        );
+
+        if (result == 0) {
+            require(experiment.totalBet0 > 0, "Winning side has no bets");
+        } else {
+            require(experiment.totalBet1 > 0, "Winning side has no bets");
+        }
+
+        experiment.bettingOutcome = result;
     }
 
     function getExperimentInfo(
