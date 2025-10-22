@@ -22,16 +22,17 @@ contract ExperimentFunding {
         uint256 costMin;
         uint256 costMax;
         uint256 totalDeposited;
-        // open indicates whether deposits/withdrawals are allowed
-        // Admin can close the experiment by setting open to false via:
-        // - adminWithdraw (after withdrawing funds)
-        // - adminClose (after ensuring all funds returned)
+        uint256 totalBet0;
+        uint256 totalBet1;
+        uint8 bettingOutcome;
+        uint256 experimentCreatedAt;
         bool open;
     }
 
     mapping(uint256 => Experiment) public experiments;
-    // Public mapping to track deposits: experimentId => depositor => amount
     mapping(uint256 => mapping(address => uint256)) public deposits;
+    mapping(uint256 => mapping(address => uint256)) public bets0;
+    mapping(uint256 => mapping(address => uint256)) public bets1;
 
     event ExperimentCreated(
         uint256 indexed experimentId,
