@@ -83,7 +83,7 @@ contract ExperimentFunding {
     function deposit(
         uint256 experimentId,
         uint256 amount
-    ) external isOpen(experimentId) {
+    ) public isOpen(experimentId) {
         // Hardcoding decimals for USDC
         require(amount > 1 * 10 ** 6, "Deposit must be greater than 1 USDC");
 
@@ -102,6 +102,44 @@ contract ExperimentFunding {
         experiment.totalDeposited += amount;
 
         emit Deposited(experimentId, msg.sender, amount);
+    }
+
+    function bet(
+        uint256 experimentId,
+        uint8 outcome,
+        uint256 amount
+    ) public isOpen(experimentId) {
+        require(amount > 1 * 10 ** 6, "Bet must be greater than 1 USDC");
+        require(outcome == 0 || outcome == 1, "Invalid outcome");
+        Experiment storage experiment = experiments[experimentId];
+        require(experiment.bettingOutcome == 255, "Betting closed");
+
+        require(
+            token.transferFrom(msg.sender, address(this), amount),
+            "Token transfer failed"
+        );
+
+        if (outcome == 0) {
+            bets0[experimentId][msg.sender] += amount;
+            experiment.totalBet0 += amount;
+        } else {
+            bets1[experimentId][msg.sender] += amount;
+            experiment.totalBet1 += amount;
+        }
+    }
+
+    function userFundAndBet(
+        uint256 experimentId,
+        uint256 fundAmount,
+        uint8 betOutcome,
+        uint256 betAmount
+    ) external {
+        if (fundAmount > 0) {
+            deposit(experimentId, fundAmount);
+        }
+        if (betAmount > 0) {
+            bet(experimentId, betOutcome, betAmount);
+        }
     }
 
     function userUndeposit(uint256 experimentId) external isOpen(experimentId) {

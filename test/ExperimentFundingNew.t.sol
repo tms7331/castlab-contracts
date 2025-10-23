@@ -47,7 +47,6 @@ contract ExperimentFundingNewTest is Test {
 
         // Get the TestToken admin addresses
         address tokenAdmin1 = 0x4611F6d137d1baf545378dD02C1b16eb63cbE755;
-        address tokenAdmin2 = 0xb306BA7A978906118542346327f3DEB93B5a3ca9;
 
         // Transfer tokens to test users
         vm.prank(tokenAdmin1);
@@ -66,7 +65,7 @@ contract ExperimentFundingNewTest is Test {
     function testThreeUsersDepositOneUndepositsAdminReturns() public {
         // Admin creates experiment with minCost = 100 USDC, maxCost = 500 USDC
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             500 * 10 ** 6 // maxCost: 500 USDC
         );
@@ -98,7 +97,7 @@ contract ExperimentFundingNewTest is Test {
         // User2 undeposits their 75 USDC
         uint256 user2BalanceBefore = token.balanceOf(user2);
         vm.prank(user2);
-        funding.undeposit(experimentId);
+        funding.userUndeposit(experimentId);
         assertEq(token.balanceOf(user2), user2BalanceBefore + 75 * 10 ** 6);
         assertEq(funding.getUserDeposit(experimentId, user2), 0);
 
@@ -115,7 +114,7 @@ contract ExperimentFundingNewTest is Test {
         uint256 user3BalanceBefore = token.balanceOf(user3);
 
         vm.prank(admin);
-        funding.adminReturn(experimentId, depositors);
+        funding.adminRefund(experimentId, depositors);
         vm.prank(admin);
         funding.adminClose(experimentId);
 
@@ -135,7 +134,7 @@ contract ExperimentFundingNewTest is Test {
     function testDepositUndepositRedepositPastMinCostAdminCloses() public {
         // Admin creates experiment with minCost = 100 USDC, maxCost = 500 USDC
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             500 * 10 ** 6 // maxCost: 500 USDC
         );
@@ -151,7 +150,7 @@ contract ExperimentFundingNewTest is Test {
 
         // User1 undeposits the 60 USDC
         vm.prank(user1);
-        funding.undeposit(experimentId);
+        funding.userUndeposit(experimentId);
         assertEq(funding.getUserDeposit(experimentId, user1), 0);
 
         // User1 redeposits 150 USDC (past minCost)
@@ -180,7 +179,7 @@ contract ExperimentFundingNewTest is Test {
         // User1 tries to undeposit but should fail because experiment is closed
         vm.expectRevert("Experiment is closed");
         vm.prank(user1);
-        funding.undeposit(experimentId);
+        funding.userUndeposit(experimentId);
 
         // User1 also can't deposit anymore
         vm.expectRevert("Experiment is closed");
@@ -191,7 +190,7 @@ contract ExperimentFundingNewTest is Test {
     function testMinimumDepositRequirement() public {
         // Admin creates experiment
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             500 * 10 ** 6 // maxCost: 500 USDC
         );
@@ -219,7 +218,7 @@ contract ExperimentFundingNewTest is Test {
     function testCannotExceedMaxCost() public {
         // Admin creates experiment
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             200 * 10 ** 6 // maxCost: 200 USDC
         );
@@ -251,23 +250,23 @@ contract ExperimentFundingNewTest is Test {
         // User1 tries to create experiment - should fail
         vm.expectRevert("Only admin or admin_dev can call this function");
         vm.prank(user1);
-        funding.createExperiment(100 * 10 ** 6, 500 * 10 ** 6);
+        funding.adminCreateExperiment(100 * 10 ** 6, 500 * 10 ** 6);
 
         // Admin1 creates experiment - should succeed
         vm.prank(admin);
-        uint256 id1 = funding.createExperiment(100 * 10 ** 6, 500 * 10 ** 6);
+        uint256 id1 = funding.adminCreateExperiment(100 * 10 ** 6, 500 * 10 ** 6);
         assertEq(id1, 0);
 
         // Admin2 creates experiment - should succeed
         vm.prank(admin2);
-        uint256 id2 = funding.createExperiment(200 * 10 ** 6, 600 * 10 ** 6);
+        uint256 id2 = funding.adminCreateExperiment(200 * 10 ** 6, 600 * 10 ** 6);
         assertEq(id2, 1);
     }
 
     function testAdminCannotWithdrawBelowMinCost() public {
         // Admin creates experiment
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             500 * 10 ** 6 // maxCost: 500 USDC
         );
@@ -303,11 +302,11 @@ contract ExperimentFundingNewTest is Test {
     function testGetUserExperiments() public {
         // Admin creates multiple experiments
         vm.prank(admin);
-        uint256 exp1 = funding.createExperiment(100 * 10 ** 6, 500 * 10 ** 6);
+        uint256 exp1 = funding.adminCreateExperiment(100 * 10 ** 6, 500 * 10 ** 6);
         vm.prank(admin);
-        uint256 exp2 = funding.createExperiment(200 * 10 ** 6, 600 * 10 ** 6);
+        funding.adminCreateExperiment(200 * 10 ** 6, 600 * 10 ** 6); // exp2 not used in test
         vm.prank(admin);
-        uint256 exp3 = funding.createExperiment(300 * 10 ** 6, 700 * 10 ** 6);
+        uint256 exp3 = funding.adminCreateExperiment(300 * 10 ** 6, 700 * 10 ** 6);
 
         // User1 deposits to exp1 and exp3
         vm.prank(user1);
@@ -334,7 +333,7 @@ contract ExperimentFundingNewTest is Test {
     function testAdminCloseRequiresZeroBalance() public {
         // Admin creates experiment
         vm.prank(admin);
-        uint256 experimentId = funding.createExperiment(
+        uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6, // minCost: 100 USDC
             500 * 10 ** 6 // maxCost: 500 USDC
         );
@@ -352,7 +351,7 @@ contract ExperimentFundingNewTest is Test {
 
         // User1 undeposits
         vm.prank(user1);
-        funding.undeposit(experimentId);
+        funding.userUndeposit(experimentId);
 
         // Now admin can close
         vm.prank(admin);
@@ -363,5 +362,206 @@ contract ExperimentFundingNewTest is Test {
         );
         assertEq(totalDeposited, 0);
         assertFalse(open);
+    }
+
+    function testNonExistentExperimentOperations() public {
+        uint256 nonExistentId = 999;
+
+        // User tries to deposit to non-existent experiment
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.expectRevert("Experiment is closed");
+        vm.prank(user1);
+        funding.deposit(nonExistentId, 50 * 10 ** 6);
+
+        // User tries to undeposit from non-existent experiment
+        vm.expectRevert("Experiment is closed");
+        vm.prank(user1);
+        funding.userUndeposit(nonExistentId);
+
+        // Admin tries to withdraw from non-existent experiment
+        vm.expectRevert("Experiment is closed");
+        vm.prank(admin);
+        funding.adminWithdraw(nonExistentId);
+
+        // Admin tries to close non-existent experiment
+        vm.expectRevert("Experiment is closed");
+        vm.prank(admin);
+        funding.adminClose(nonExistentId);
+
+        // Admin tries to return funds from non-existent experiment
+        address[] memory depositors = new address[](1);
+        depositors[0] = user1;
+        vm.expectRevert("Experiment is closed");
+        vm.prank(admin);
+        funding.adminRefund(nonExistentId, depositors);
+    }
+
+    function testAdminDevPermissionBoundaries() public {
+        // admin_dev can create experiments
+        vm.prank(admin2);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User deposits some funds
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.deposit(experimentId, 150 * 10 ** 6);
+
+        // admin_dev can NOT withdraw (only admin)
+        vm.expectRevert("Only admin can call this function");
+        vm.prank(admin2);
+        funding.adminWithdraw(experimentId);
+
+        // admin_dev CAN close after funds returned
+        vm.prank(user1);
+        funding.userUndeposit(experimentId);
+        vm.prank(admin2);
+        funding.adminClose(experimentId);
+
+        // Create another experiment for adminReturn test
+        vm.prank(admin2);
+        uint256 experimentId2 = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        funding.deposit(experimentId2, 50 * 10 ** 6);
+
+        // admin_dev CAN return funds
+        address[] memory depositors = new address[](1);
+        depositors[0] = user1;
+        vm.prank(admin2);
+        funding.adminRefund(experimentId2, depositors);
+    }
+
+    function testMultipleDepositsFromSameUser() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+
+        // First deposit: 30 USDC
+        vm.prank(user1);
+        funding.deposit(experimentId, 30 * 10 ** 6);
+        assertEq(funding.getUserDeposit(experimentId, user1), 30 * 10 ** 6);
+
+        // Second deposit: 25 USDC (total: 55)
+        vm.prank(user1);
+        funding.deposit(experimentId, 25 * 10 ** 6);
+        assertEq(funding.getUserDeposit(experimentId, user1), 55 * 10 ** 6);
+
+        // Third deposit: 45 USDC (total: 100)
+        vm.prank(user1);
+        funding.deposit(experimentId, 45 * 10 ** 6);
+        assertEq(funding.getUserDeposit(experimentId, user1), 100 * 10 ** 6);
+
+        // Verify total deposited
+        (, , uint256 totalDeposited, ) = funding.getExperimentInfo(experimentId);
+        assertEq(totalDeposited, 100 * 10 ** 6);
+
+        // Undeposit withdraws full accumulated amount
+        uint256 balanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        funding.userUndeposit(experimentId);
+        assertEq(token.balanceOf(user1), balanceBefore + 100 * 10 ** 6);
+        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+    }
+
+    function testAdminReturnWithZeroDeposits() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 and User2 deposit
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.deposit(experimentId, 50 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.deposit(experimentId, 75 * 10 ** 6);
+
+        // Try to return funds to user3 who never deposited (should be no-op)
+        address[] memory depositors = new address[](3);
+        depositors[0] = user1;
+        depositors[1] = user3; // Never deposited
+        depositors[2] = user2;
+
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        uint256 user2BalanceBefore = token.balanceOf(user2);
+        uint256 user3BalanceBefore = token.balanceOf(user3);
+
+        vm.prank(admin);
+        funding.adminRefund(experimentId, depositors);
+
+        // User1 and User2 get funds, User3 gets nothing (had no deposit)
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 50 * 10 ** 6);
+        assertEq(token.balanceOf(user2), user2BalanceBefore + 75 * 10 ** 6);
+        assertEq(token.balanceOf(user3), user3BalanceBefore); // No change
+
+        // All deposits cleared
+        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+        assertEq(funding.getUserDeposit(experimentId, user2), 0);
+        assertEq(funding.getUserDeposit(experimentId, user3), 0);
+    }
+
+    function testUserActionsAfterAdminWithdraw() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 and User2 deposit
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.deposit(experimentId, 60 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.deposit(experimentId, 80 * 10 ** 6);
+
+        // Admin withdraws (experiment succeeds)
+        vm.prank(admin);
+        funding.adminWithdraw(experimentId);
+
+        // Verify experiment is closed
+        (, , uint256 totalDeposited, bool open) = funding.getExperimentInfo(experimentId);
+        assertEq(totalDeposited, 0);
+        assertFalse(open);
+
+        // IMPORTANT: User deposits are preserved for NFT claims
+        assertEq(funding.getUserDeposit(experimentId, user1), 60 * 10 ** 6);
+        assertEq(funding.getUserDeposit(experimentId, user2), 80 * 10 ** 6);
+
+        // Users cannot undeposit (experiment closed)
+        vm.expectRevert("Experiment is closed");
+        vm.prank(user1);
+        funding.userUndeposit(experimentId);
+
+        // Users cannot deposit more (experiment closed)
+        vm.expectRevert("Experiment is closed");
+        vm.prank(user1);
+        funding.deposit(experimentId, 10 * 10 ** 6);
+
+        // Admin cannot withdraw again (experiment closed)
+        vm.expectRevert("Experiment is closed");
+        vm.prank(admin);
+        funding.adminWithdraw(experimentId);
     }
 }
