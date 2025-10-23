@@ -12,7 +12,7 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-contract ExperimentFunding {
+contract CastlabExperiment {
     address public immutable admin;
     address public immutable admin_dev;
     IERC20 public immutable token;
