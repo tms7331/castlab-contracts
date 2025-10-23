@@ -2,11 +2,11 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-import "../src/ExperimentFunding.sol";
+import "../src/CastlabExperiment.sol";
 import "../src/TestToken.sol";
 
-contract ExperimentFundingNewTest is Test {
-    ExperimentFunding public funding;
+contract CastlabExperimentNewTest is Test {
+    CastlabExperiment public funding;
     TestToken public token;
     address public admin;
     address public admin2;
@@ -43,7 +43,7 @@ contract ExperimentFundingNewTest is Test {
 
         // Deploy token and funding contracts
         token = new TestToken();
-        funding = new ExperimentFunding(admin, admin2, address(token));
+        funding = new CastlabExperiment(admin, admin2, address(token));
 
         // Get the TestToken admin addresses
         address tokenAdmin1 = 0x4611F6d137d1baf545378dD02C1b16eb63cbE755;

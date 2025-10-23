@@ -49,6 +49,29 @@ contract CastlabExperiment {
         address indexed depositor,
         uint256 amount
     );
+    event BetPlaced(
+        uint256 indexed experimentId,
+        address indexed bettor,
+        uint8 outcome,
+        uint256 amount
+    );
+    event BetWithdrawn(
+        uint256 indexed experimentId,
+        address indexed bettor,
+        uint256 amount
+    );
+    event BetReturned(
+        uint256 indexed experimentId,
+        address indexed bettor,
+        uint256 amount
+    );
+    event BetProfitClaimed(
+        uint256 indexed experimentId,
+        address indexed winner,
+        uint256 payout
+    );
+    event ResultSet(uint256 indexed experimentId, uint8 result);
+    event MarketClosed(uint256 indexed experimentId);
     event AdminWithdraw(uint256 indexed experimentId, uint256 amount);
     event AdminClose(uint256 indexed experimentId);
 
@@ -126,6 +149,8 @@ contract CastlabExperiment {
             bets1[experimentId][msg.sender] += amount;
             experiment.totalBet1 += amount;
         }
+
+        emit BetPlaced(experimentId, msg.sender, outcome, amount);
     }
 
     function userFundAndBet(
@@ -177,6 +202,8 @@ contract CastlabExperiment {
         experiment.totalBet1 -= amount1;
 
         require(token.transfer(msg.sender, total), "Transfer failed");
+
+        emit BetWithdrawn(experimentId, msg.sender, total);
     }
 
     function userClaimBetProfit(uint256 experimentId) external {
@@ -201,6 +228,8 @@ contract CastlabExperiment {
         }
 
         require(token.transfer(msg.sender, payout), "Transfer failed");
+
+        emit BetProfitClaimed(experimentId, msg.sender, payout);
     }
 
     function adminCreateExperiment(
@@ -297,6 +326,7 @@ contract CastlabExperiment {
                 experiment.totalBet0 -= amount0;
                 experiment.totalBet1 -= amount1;
                 require(token.transfer(users[i], total), "Transfer failed");
+                emit BetReturned(experimentId, users[i], total);
             }
         }
     }
@@ -314,6 +344,8 @@ contract CastlabExperiment {
             "Must return all bets first"
         );
         experiment.open = false;
+
+        emit MarketClosed(experimentId);
     }
 
     function adminSetResult(
@@ -335,6 +367,8 @@ contract CastlabExperiment {
         }
 
         experiment.bettingOutcome = result;
+
+        emit ResultSet(experimentId, result);
     }
 
     function getExperimentInfo(
