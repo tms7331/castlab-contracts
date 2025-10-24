@@ -154,7 +154,15 @@ contract CastlabExperiment {
         uint256 experimentId
     ) external onlyAdminPlusDev isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
-        require(experiment.totalDeposited == 0, "Must return all funds first");
+        require(
+            experiment.totalDeposited == 0,
+            "Must return all deposits first"
+        );
+        require(
+            experiment.totalBet0 == 0 && experiment.totalBet1 == 0,
+            "Must return all bets first"
+        );
+
         experiment.open = false;
         emit AdminClose(experimentId);
     }
@@ -207,30 +215,16 @@ contract CastlabExperiment {
         }
     }
 
-    function adminCloseMarket(
-        uint256 experimentId
-    ) external onlyAdmin isOpen(experimentId) {
-        Experiment storage experiment = experiments[experimentId];
-        require(
-            experiment.totalDeposited == 0,
-            "Must return all deposits first"
-        );
-        require(
-            experiment.totalBet0 == 0 && experiment.totalBet1 == 0,
-            "Must return all bets first"
-        );
-        experiment.open = false;
-
-        emit MarketClosed(experimentId);
-    }
-
     function adminSetResult(
         uint256 experimentId,
         uint8 result
     ) external onlyAdmin {
-        Experiment storage experiment = experiments[experimentId];
-        require(experiment.bettingOutcome == 255, "Result already set");
         require(result == 0 || result == 1, "Invalid result");
+
+        Experiment storage experiment = experiments[experimentId];
+        // Can only set result if experiment is closed
+        require(!experiment.open, "Experiment is not closed");
+        require(experiment.bettingOutcome == 255, "Result already set");
         require(
             experiment.totalBet0 > 0 || experiment.totalBet1 > 0,
             "No bets placed"
