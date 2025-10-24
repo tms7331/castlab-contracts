@@ -250,14 +250,14 @@ contract CastlabExperiment {
     function userFundAndBet(
         uint256 experimentId,
         uint256 fundAmount,
-        uint8 betOutcome,
-        uint256 betAmount
+        uint256 betAmount0,
+        uint256 betAmount1
     ) external {
         if (fundAmount > 0) {
             userDeposit(experimentId, fundAmount);
         }
-        if (betAmount > 0) {
-            userBet(experimentId, betOutcome, betAmount);
+        if (betAmount0 > 0 || betAmount1 > 0) {
+            userBet(experimentId, betAmount0, betAmount1);
         }
     }
 
@@ -356,28 +356,39 @@ contract CastlabExperiment {
 
     function userBet(
         uint256 experimentId,
-        uint8 outcome,
-        uint256 amount
+        uint256 betAmount0,
+        uint256 betAmount1
     ) public isOpen(experimentId) {
-        require(amount > 1 * MIN_AMOUNT, "Bet must be greater than 1 USDC");
-        require(outcome == 0 || outcome == 1, "Invalid outcome");
+        uint256 totalAmount = betAmount0 + betAmount1;
+        require(totalAmount > 0, "Must bet on at least one outcome");
+        require(
+            betAmount0 == 0 || betAmount0 > MIN_AMOUNT,
+            "Bet on outcome 0 must be 0 or greater than 1 USDC"
+        );
+        require(
+            betAmount1 == 0 || betAmount1 > MIN_AMOUNT,
+            "Bet on outcome 1 must be 0 or greater than 1 USDC"
+        );
+
         Experiment storage experiment = experiments[experimentId];
         require(experiment.bettingOutcome == 255, "Betting closed");
 
         require(
-            token.transferFrom(msg.sender, address(this), amount),
+            token.transferFrom(msg.sender, address(this), totalAmount),
             "Token transfer failed"
         );
 
-        if (outcome == 0) {
-            bets0[experimentId][msg.sender] += amount;
-            experiment.totalBet0 += amount;
-        } else {
-            bets1[experimentId][msg.sender] += amount;
-            experiment.totalBet1 += amount;
+        if (betAmount0 > 0) {
+            bets0[experimentId][msg.sender] += betAmount0;
+            experiment.totalBet0 += betAmount0;
+            emit BetPlaced(experimentId, msg.sender, 0, betAmount0);
         }
 
-        emit BetPlaced(experimentId, msg.sender, outcome, amount);
+        if (betAmount1 > 0) {
+            bets1[experimentId][msg.sender] += betAmount1;
+            experiment.totalBet1 += betAmount1;
+            emit BetPlaced(experimentId, msg.sender, 1, betAmount1);
+        }
     }
 
     // External View Functions

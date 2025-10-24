@@ -596,13 +596,13 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User2 bets 75 USDC on side 1
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 75 * 10 ** 6);
+        funding.userBet(experimentId, 0, 75 * 10 ** 6);
 
         // Verify bet amounts are tracked
         assertEq(funding.bets0(experimentId, user1), 50 * 10 ** 6);
@@ -620,18 +620,18 @@ contract CastlabExperimentNewTest is Test {
         token.approve(address(funding), INITIAL_BALANCE);
 
         // Try to bet exactly 1 USDC - should fail
-        vm.expectRevert("Bet must be greater than 1 USDC");
+        vm.expectRevert("Bet on outcome 0 must be 0 or greater than 1 USDC");
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 1 * 10 ** 6);
+        funding.userBet(experimentId, 1 * 10 ** 6, 0);
 
         // Try to bet 0.5 USDC - should fail
-        vm.expectRevert("Bet must be greater than 1 USDC");
+        vm.expectRevert("Bet on outcome 0 must be 0 or greater than 1 USDC");
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 0.5 * 10 ** 6);
+        funding.userBet(experimentId, 0.5 * 10 ** 6, 0);
 
         // Bet 1.1 USDC - should succeed
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 1.1 * 10 ** 6);
+        funding.userBet(experimentId, 1.1 * 10 ** 6, 0);
         assertEq(funding.bets0(experimentId, user1), 1.1 * 10 ** 6);
     }
 
@@ -645,15 +645,10 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
 
-        // Try to bet on outcome 2 (invalid) - should fail
-        vm.expectRevert("Invalid outcome");
+        // Try to bet with no amount on either side - should fail
+        vm.expectRevert("Must bet on at least one outcome");
         vm.prank(user1);
-        funding.userBet(experimentId, 2, 50 * 10 ** 6);
-
-        // Try to bet on outcome 255 - should fail
-        vm.expectRevert("Invalid outcome");
-        vm.prank(user1);
-        funding.userBet(experimentId, 255, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 0);
     }
 
     function testMultipleBetsFromSameUser() public {
@@ -668,17 +663,17 @@ contract CastlabExperimentNewTest is Test {
 
         // First bet: 30 USDC on side 0
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        funding.userBet(experimentId, 30 * 10 ** 6, 0);
         assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
 
         // Second bet: 25 USDC on side 0 (total: 55)
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 25 * 10 ** 6);
+        funding.userBet(experimentId, 25 * 10 ** 6, 0);
         assertEq(funding.bets0(experimentId, user1), 55 * 10 ** 6);
 
         // Third bet: 45 USDC on side 0 (total: 100)
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 45 * 10 ** 6);
+        funding.userBet(experimentId, 45 * 10 ** 6, 0);
         assertEq(funding.bets0(experimentId, user1), 100 * 10 ** 6);
     }
 
@@ -694,11 +689,11 @@ contract CastlabExperimentNewTest is Test {
 
         // User1 bets on side 0
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User1 also bets on side 1 (hedging)
         vm.prank(user1);
-        funding.userBet(experimentId, 1, 30 * 10 ** 6);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
 
         // Verify both bets are tracked
         assertEq(funding.bets0(experimentId, user1), 50 * 10 ** 6);
@@ -716,13 +711,13 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 100 * 10 ** 6);
+        funding.userBet(experimentId, 100 * 10 ** 6, 0);
 
         // User2 bets 50 USDC on side 1
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // Admin sets result to 0 (user1 wins)
         vm.prank(admin);
@@ -749,19 +744,19 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 60 * 10 ** 6);
+        funding.userBet(experimentId, 60 * 10 ** 6, 0);
 
         // User2 bets 40 USDC on side 0
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 0, 40 * 10 ** 6);
+        funding.userBet(experimentId, 40 * 10 ** 6, 0);
 
         // User3 bets 100 USDC on side 1 (loses)
         vm.prank(user3);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user3);
-        funding.userBet(experimentId, 1, 100 * 10 ** 6);
+        funding.userBet(experimentId, 0, 100 * 10 ** 6);
 
         // Total pool: 200 USDC
         // Winning side (0): 100 USDC
@@ -801,12 +796,12 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // Admin sets result to 0
         vm.prank(admin);
@@ -829,7 +824,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // Admin tries to set result to 1 (but no one bet on side 1) - should fail
         vm.expectRevert("Winning side has no bets");
@@ -866,12 +861,12 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // Admin sets result
         vm.prank(admin);
@@ -882,7 +877,7 @@ contract CastlabExperimentNewTest is Test {
         token.approve(address(funding), INITIAL_BALANCE);
         vm.expectRevert("Betting closed");
         vm.prank(user3);
-        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        funding.userBet(experimentId, 30 * 10 ** 6, 0);
     }
 
     function testCannotClaimBeforeResultSet() public {
@@ -896,7 +891,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User1 tries to claim before result set - should fail
         vm.expectRevert("Result not set");
@@ -915,13 +910,13 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User2 bets on side 1
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // Admin sets result to 0
         vm.prank(admin);
@@ -948,9 +943,9 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
         vm.prank(user1);
-        funding.userBet(experimentId, 1, 30 * 10 ** 6);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
 
         // Try to unbet before 30 days - should fail
         vm.expectRevert("Must wait 90 days");
@@ -984,12 +979,12 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // Admin sets result
         vm.prank(admin);
@@ -1015,21 +1010,21 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User2 bets 75 USDC on side 1
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 75 * 10 ** 6);
+        funding.userBet(experimentId, 0, 75 * 10 ** 6);
 
         // User3 bets on both sides
         vm.prank(user3);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user3);
-        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        funding.userBet(experimentId, 30 * 10 ** 6, 0);
         vm.prank(user3);
-        funding.userBet(experimentId, 1, 20 * 10 ** 6);
+        funding.userBet(experimentId, 0, 20 * 10 ** 6);
 
         // Admin returns bets
         address[] memory users = new address[](3);
@@ -1067,7 +1062,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // admin_dev returns bet
         address[] memory users = new address[](1);
@@ -1090,7 +1085,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // Try to close market with bets still active - should fail
         vm.expectRevert("Must return all bets first");
@@ -1146,12 +1141,12 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
 
         // admin_dev tries to set result - should fail
         vm.expectRevert("Only admin can call this function");
@@ -1199,8 +1194,8 @@ contract CastlabExperimentNewTest is Test {
         funding.userFundAndBet(
             experimentId,
             50 * 10 ** 6, // fund amount
-            0, // bet outcome
-            30 * 10 ** 6 // bet amount
+            30 * 10 ** 6, // bet amount on outcome 0
+            0 // bet amount on outcome 1
         );
 
         // Verify both deposit and bet were recorded
@@ -1222,8 +1217,8 @@ contract CastlabExperimentNewTest is Test {
         funding.userFundAndBet(
             experimentId,
             0, // no fund amount
-            0, // bet outcome
-            30 * 10 ** 6 // bet amount
+            30 * 10 ** 6, // bet amount on outcome 0
+            0 // bet amount on outcome 1
         );
 
         // Verify only bet was recorded
@@ -1245,8 +1240,8 @@ contract CastlabExperimentNewTest is Test {
         funding.userFundAndBet(
             experimentId,
             50 * 10 ** 6, // fund amount
-            0, // bet outcome (doesn't matter)
-            0 // no bet amount
+            0, // bet amount on outcome 0
+            0 // bet amount on outcome 1
         );
 
         // Verify only deposit was recorded
@@ -1270,7 +1265,7 @@ contract CastlabExperimentNewTest is Test {
         token.approve(address(funding), INITIAL_BALANCE);
         vm.expectRevert("Experiment is closed");
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        funding.userBet(experimentId, 50 * 10 ** 6, 0);
     }
 
     function testCompleteSuccessPath() public {
@@ -1294,10 +1289,10 @@ contract CastlabExperimentNewTest is Test {
 
         // Users place bets
         vm.prank(user1);
-        funding.userBet(experimentId, 0, 40 * 10 ** 6);
+        funding.userBet(experimentId, 40 * 10 ** 6, 0);
 
         vm.prank(user2);
-        funding.userBet(experimentId, 1, 60 * 10 ** 6);
+        funding.userBet(experimentId, 0, 60 * 10 ** 6);
 
         // Admin withdraws funding (experiment succeeds)
         vm.prank(admin);
@@ -1333,7 +1328,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
         vm.prank(user2);
-        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        funding.userBet(experimentId, 30 * 10 ** 6, 0);
 
         // Admin decides to cancel experiment
         // First refund deposits
