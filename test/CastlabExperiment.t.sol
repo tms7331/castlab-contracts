@@ -580,4 +580,780 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(admin);
         funding.adminWithdraw(experimentId);
     }
+
+    // ============================================
+    // BETTING TESTS
+    // ============================================
+
+    function testBasicBettingOnBothSides() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets 50 USDC on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // User2 bets 75 USDC on side 1
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 75 * 10 ** 6);
+
+        // Verify bet amounts are tracked
+        assertEq(funding.bets0(experimentId, user1), 50 * 10 ** 6);
+        assertEq(funding.bets1(experimentId, user2), 75 * 10 ** 6);
+    }
+
+    function testMinimumBetRequirement() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+
+        // Try to bet exactly 1 USDC - should fail
+        vm.expectRevert("Bet must be greater than 1 USDC");
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 1 * 10 ** 6);
+
+        // Try to bet 0.5 USDC - should fail
+        vm.expectRevert("Bet must be greater than 1 USDC");
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 0.5 * 10 ** 6);
+
+        // Bet 1.1 USDC - should succeed
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 1.1 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 1.1 * 10 ** 6);
+    }
+
+    function testCannotBetOnInvalidOutcome() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+
+        // Try to bet on outcome 2 (invalid) - should fail
+        vm.expectRevert("Invalid outcome");
+        vm.prank(user1);
+        funding.userBet(experimentId, 2, 50 * 10 ** 6);
+
+        // Try to bet on outcome 255 - should fail
+        vm.expectRevert("Invalid outcome");
+        vm.prank(user1);
+        funding.userBet(experimentId, 255, 50 * 10 ** 6);
+    }
+
+    function testMultipleBetsFromSameUser() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+
+        // First bet: 30 USDC on side 0
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
+
+        // Second bet: 25 USDC on side 0 (total: 55)
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 25 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 55 * 10 ** 6);
+
+        // Third bet: 45 USDC on side 0 (total: 100)
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 45 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 100 * 10 ** 6);
+    }
+
+    function testUserCanHedgeByBettingBothSides() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+
+        // User1 bets on side 0
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // User1 also bets on side 1 (hedging)
+        vm.prank(user1);
+        funding.userBet(experimentId, 1, 30 * 10 ** 6);
+
+        // Verify both bets are tracked
+        assertEq(funding.bets0(experimentId, user1), 50 * 10 ** 6);
+        assertEq(funding.bets1(experimentId, user1), 30 * 10 ** 6);
+    }
+
+    function testAdminSetResultAndClaimProfit() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets 100 USDC on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 100 * 10 ** 6);
+
+        // User2 bets 50 USDC on side 1
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // Admin sets result to 0 (user1 wins)
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // User1 claims profit (should get all 150 USDC)
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 150 * 10 ** 6);
+
+        // User1's bet should be zeroed
+        assertEq(funding.bets0(experimentId, user1), 0);
+    }
+
+    function testProportionalPayoutCalculation() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets 60 USDC on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 60 * 10 ** 6);
+
+        // User2 bets 40 USDC on side 0
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 0, 40 * 10 ** 6);
+
+        // User3 bets 100 USDC on side 1 (loses)
+        vm.prank(user3);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user3);
+        funding.userBet(experimentId, 1, 100 * 10 ** 6);
+
+        // Total pool: 200 USDC
+        // Winning side (0): 100 USDC
+        // User1 payout: (60 / 100) * 200 = 120 USDC
+        // User2 payout: (40 / 100) * 200 = 80 USDC
+
+        // Admin sets result to 0
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // User1 claims
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 120 * 10 ** 6);
+
+        // User2 claims
+        uint256 user2BalanceBefore = token.balanceOf(user2);
+        vm.prank(user2);
+        funding.userClaimBetProfit(experimentId);
+        assertEq(token.balanceOf(user2), user2BalanceBefore + 80 * 10 ** 6);
+
+        // User3 cannot claim (losing side)
+        vm.expectRevert("No winning bet");
+        vm.prank(user3);
+        funding.userClaimBetProfit(experimentId);
+    }
+
+    function testCannotSetResultTwice() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Place some bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // Admin sets result to 0
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // Try to set result again - should fail
+        vm.expectRevert("Result already set");
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 1);
+    }
+
+    function testCannotSetResultWinningSideHasNoBets() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Only user1 bets on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // Admin tries to set result to 1 (but no one bet on side 1) - should fail
+        vm.expectRevert("Winning side has no bets");
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 1);
+
+        // Admin sets result to 0 - should succeed
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+    }
+
+    function testCannotSetResultWithNoBets() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // No bets placed
+        // Admin tries to set result - should fail
+        vm.expectRevert("No bets placed");
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+    }
+
+    function testCannotBetAfterResultSet() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Place initial bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // Admin sets result
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // User3 tries to bet - should fail
+        vm.prank(user3);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.expectRevert("Betting closed");
+        vm.prank(user3);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+    }
+
+    function testCannotClaimBeforeResultSet() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // User1 tries to claim before result set - should fail
+        vm.expectRevert("Result not set");
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+    }
+
+    function testCannotClaimTwice() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // User2 bets on side 1
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // Admin sets result to 0
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // User1 claims once
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+
+        // User1 tries to claim again - should fail
+        vm.expectRevert("No winning bet");
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+    }
+
+    function testUserUnbetAfter90Days() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets on both sides
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+        vm.prank(user1);
+        funding.userBet(experimentId, 1, 30 * 10 ** 6);
+
+        // Try to unbet before 30 days - should fail
+        vm.expectRevert("Must wait 90 days");
+        vm.prank(user1);
+        funding.userUnbet(experimentId);
+
+        // Fast forward 90 days
+        vm.warp(block.timestamp + 90 days);
+
+        // Now user can unbet
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        funding.userUnbet(experimentId);
+
+        // User should get both bets back (50 + 30 = 80)
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 80 * 10 ** 6);
+
+        // Bets should be zeroed
+        assertEq(funding.bets0(experimentId, user1), 0);
+        assertEq(funding.bets1(experimentId, user1), 0);
+    }
+
+    function testCannotUnbetAfterResultSet() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // Admin sets result
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // Fast forward 30 days
+        vm.warp(block.timestamp + 90 days);
+
+        // User tries to unbet - should fail because result is set
+        vm.expectRevert("Result already set");
+        vm.prank(user1);
+        funding.userUnbet(experimentId);
+    }
+
+    function testAdminReturnBetToMultipleUsers() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets 50 USDC on side 0
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // User2 bets 75 USDC on side 1
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 75 * 10 ** 6);
+
+        // User3 bets on both sides
+        vm.prank(user3);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user3);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+        vm.prank(user3);
+        funding.userBet(experimentId, 1, 20 * 10 ** 6);
+
+        // Admin returns bets
+        address[] memory users = new address[](3);
+        users[0] = user1;
+        users[1] = user2;
+        users[2] = user3;
+
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        uint256 user2BalanceBefore = token.balanceOf(user2);
+        uint256 user3BalanceBefore = token.balanceOf(user3);
+
+        vm.prank(admin);
+        funding.adminReturnBet(experimentId, users);
+
+        // Verify users got their bets back
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 50 * 10 ** 6);
+        assertEq(token.balanceOf(user2), user2BalanceBefore + 75 * 10 ** 6);
+        assertEq(token.balanceOf(user3), user3BalanceBefore + 50 * 10 ** 6); // 30 + 20
+
+        // Verify bets are cleared
+        assertEq(funding.bets0(experimentId, user1), 0);
+        assertEq(funding.bets1(experimentId, user2), 0);
+        assertEq(funding.bets0(experimentId, user3), 0);
+        assertEq(funding.bets1(experimentId, user3), 0);
+    }
+
+    function testAdminDevCanReturnBets() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // admin_dev returns bet
+        address[] memory users = new address[](1);
+        users[0] = user1;
+
+        vm.prank(admin2); // admin2 is admin_dev
+        funding.adminReturnBet(experimentId, users);
+
+        assertEq(funding.bets0(experimentId, user1), 0);
+    }
+
+    function testAdminCloseMarketRequiresAllBetsReturned() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        // Try to close market with bets still active - should fail
+        vm.expectRevert("Must return all bets first");
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+
+        // Return bet
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        vm.prank(admin);
+        funding.adminReturnBet(experimentId, users);
+
+        // Now can close market
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+    }
+
+    function testAdminCloseMarketRequiresAllDepositsReturned() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 deposits
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userDeposit(experimentId, 50 * 10 ** 6);
+
+        // Try to close market with deposits still active - should fail
+        vm.expectRevert("Must return all deposits first");
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+
+        // Return deposit
+        vm.prank(user1);
+        funding.userUndeposit(experimentId);
+
+        // Now can close market
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+    }
+
+    function testOnlyAdminCanSetResult() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Place bets
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 50 * 10 ** 6);
+
+        // admin_dev tries to set result - should fail
+        vm.expectRevert("Only admin can call this function");
+        vm.prank(admin2);
+        funding.adminSetResult(experimentId, 0);
+
+        // Regular user tries to set result - should fail
+        vm.expectRevert("Only admin can call this function");
+        vm.prank(user1);
+        funding.adminSetResult(experimentId, 0);
+
+        // Admin sets result - should succeed
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+    }
+
+    function testOnlyAdminCanCloseMarket() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // admin_dev tries to close market - should fail
+        vm.expectRevert("Only admin can call this function");
+        vm.prank(admin2);
+        funding.adminCloseMarket(experimentId);
+
+        // Admin can close market
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+    }
+
+    function testUserFundAndBetConvenienceFunction() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 funds and bets in one transaction
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userFundAndBet(
+            experimentId,
+            50 * 10 ** 6, // fund amount
+            0, // bet outcome
+            30 * 10 ** 6 // bet amount
+        );
+
+        // Verify both deposit and bet were recorded
+        assertEq(funding.getUserDeposit(experimentId, user1), 50 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
+    }
+
+    function testUserFundAndBetWithZeroFund() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 only bets (no funding)
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userFundAndBet(
+            experimentId,
+            0, // no fund amount
+            0, // bet outcome
+            30 * 10 ** 6 // bet amount
+        );
+
+        // Verify only bet was recorded
+        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+        assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
+    }
+
+    function testUserFundAndBetWithZeroBet() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // User1 only funds (no betting)
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userFundAndBet(
+            experimentId,
+            50 * 10 ** 6, // fund amount
+            0, // bet outcome (doesn't matter)
+            0 // no bet amount
+        );
+
+        // Verify only deposit was recorded
+        assertEq(funding.getUserDeposit(experimentId, user1), 50 * 10 ** 6);
+        assertEq(funding.bets0(experimentId, user1), 0);
+    }
+
+    function testCannotBetOnClosedExperiment() public {
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Close the experiment
+        vm.prank(admin);
+        funding.adminClose(experimentId);
+
+        // Try to bet on closed experiment - should fail
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.expectRevert("Experiment is closed");
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 50 * 10 ** 6);
+    }
+
+    function testCompleteSuccessPath() public {
+        // Admin creates experiment
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Users deposit to fund experiment
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userDeposit(experimentId, 60 * 10 ** 6);
+
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userDeposit(experimentId, 80 * 10 ** 6);
+
+        // Users place bets
+        vm.prank(user1);
+        funding.userBet(experimentId, 0, 40 * 10 ** 6);
+
+        vm.prank(user2);
+        funding.userBet(experimentId, 1, 60 * 10 ** 6);
+
+        // Admin withdraws funding (experiment succeeds)
+        vm.prank(admin);
+        funding.adminWithdraw(experimentId);
+
+        // Admin sets result
+        vm.prank(admin);
+        funding.adminSetResult(experimentId, 0);
+
+        // Winner claims profit
+        uint256 user1BalanceBefore = token.balanceOf(user1);
+        vm.prank(user1);
+        funding.userClaimBetProfit(experimentId);
+        // User1 should get all 100 USDC (40 + 60)
+        assertEq(token.balanceOf(user1), user1BalanceBefore + 100 * 10 ** 6);
+    }
+
+    function testCompleteFailurePath() public {
+        // Admin creates experiment
+        vm.prank(admin);
+        uint256 experimentId = funding.adminCreateExperiment(
+            100 * 10 ** 6,
+            500 * 10 ** 6
+        );
+
+        // Users deposit
+        vm.prank(user1);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user1);
+        funding.userDeposit(experimentId, 50 * 10 ** 6);
+
+        // Users place bets
+        vm.prank(user2);
+        token.approve(address(funding), INITIAL_BALANCE);
+        vm.prank(user2);
+        funding.userBet(experimentId, 0, 30 * 10 ** 6);
+
+        // Admin decides to cancel experiment
+        // First refund deposits
+        address[] memory depositors = new address[](1);
+        depositors[0] = user1;
+        vm.prank(admin);
+        funding.adminRefund(experimentId, depositors);
+
+        // Then return bets
+        address[] memory bettors = new address[](1);
+        bettors[0] = user2;
+        vm.prank(admin);
+        funding.adminReturnBet(experimentId, bettors);
+
+        // Finally close market
+        vm.prank(admin);
+        funding.adminCloseMarket(experimentId);
+
+        // Verify experiment is closed
+        (, , , bool open) = funding.getExperimentInfo(experimentId);
+        assertFalse(open);
+    }
 }

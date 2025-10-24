@@ -17,7 +17,7 @@ contract CastlabExperiment {
     address public immutable admin_dev;
     IERC20 public immutable token;
     uint256 public nextExperimentId;
-
+    uint256 public constant MIN_AMOUNT = 1 * 10 ** 6;
     struct Experiment {
         uint256 costMin;
         uint256 costMax;
@@ -105,90 +105,14 @@ contract CastlabExperiment {
 
     // External Functions
 
-    function userFundAndBet(
-        uint256 experimentId,
-        uint256 fundAmount,
-        uint8 betOutcome,
-        uint256 betAmount
-    ) external {
-        if (fundAmount > 0) {
-            userDeposit(experimentId, fundAmount);
-        }
-        if (betAmount > 0) {
-            userBet(experimentId, betOutcome, betAmount);
-        }
-    }
-
-    function userUndeposit(uint256 experimentId) external isOpen(experimentId) {
-        Experiment storage experiment = experiments[experimentId];
-        require(
-            deposits[experimentId][msg.sender] > 0,
-            "No deposits to withdraw"
-        );
-
-        uint256 amount = deposits[experimentId][msg.sender];
-        deposits[experimentId][msg.sender] = 0;
-        experiment.totalDeposited -= amount;
-
-        require(token.transfer(msg.sender, amount), "Token transfer failed");
-
-        emit Undeposited(experimentId, msg.sender, amount);
-    }
-
-    function userUnbet(uint256 experimentId) external {
-        Experiment storage experiment = experiments[experimentId];
-        require(
-            block.timestamp >= experiment.experimentCreatedAt + 30 days,
-            "Must wait 30 days"
-        );
-        require(experiment.bettingOutcome == 255, "Result already set");
-
-        uint256 amount0 = bets0[experimentId][msg.sender];
-        uint256 amount1 = bets1[experimentId][msg.sender];
-        uint256 total = amount0 + amount1;
-        require(total > 0, "No bets to withdraw");
-
-        bets0[experimentId][msg.sender] = 0;
-        bets1[experimentId][msg.sender] = 0;
-        experiment.totalBet0 -= amount0;
-        experiment.totalBet1 -= amount1;
-
-        require(token.transfer(msg.sender, total), "Transfer failed");
-
-        emit BetWithdrawn(experimentId, msg.sender, total);
-    }
-
-    function userClaimBetProfit(uint256 experimentId) external {
-        Experiment storage experiment = experiments[experimentId];
-        require(experiment.bettingOutcome != 255, "Result not set");
-
-        uint256 payout;
-        if (experiment.bettingOutcome == 0) {
-            uint256 userBet = bets0[experimentId][msg.sender];
-            require(userBet > 0, "No winning bet");
-            payout =
-                (userBet * (experiment.totalBet0 + experiment.totalBet1)) /
-                experiment.totalBet0;
-            bets0[experimentId][msg.sender] = 0;
-        } else {
-            uint256 userBet = bets1[experimentId][msg.sender];
-            require(userBet > 0, "No winning bet");
-            payout =
-                (userBet * (experiment.totalBet0 + experiment.totalBet1)) /
-                experiment.totalBet1;
-            bets1[experimentId][msg.sender] = 0;
-        }
-
-        require(token.transfer(msg.sender, payout), "Transfer failed");
-
-        emit BetProfitClaimed(experimentId, msg.sender, payout);
-    }
-
     function adminCreateExperiment(
         uint256 costMin,
         uint256 costMax
     ) external onlyAdminPlusDev returns (uint256) {
-        require(costMin > 0, "Minimum cost must be greater than 0");
+        require(
+            costMin > MIN_AMOUNT,
+            "Minimum cost must be greater than 1 USDC"
+        );
         require(costMax >= costMin, "Maximum cost must be >= minimum cost");
 
         uint256 experimentId = nextExperimentId++;
@@ -323,6 +247,87 @@ contract CastlabExperiment {
         emit ResultSet(experimentId, result);
     }
 
+    function userFundAndBet(
+        uint256 experimentId,
+        uint256 fundAmount,
+        uint8 betOutcome,
+        uint256 betAmount
+    ) external {
+        if (fundAmount > 0) {
+            userDeposit(experimentId, fundAmount);
+        }
+        if (betAmount > 0) {
+            userBet(experimentId, betOutcome, betAmount);
+        }
+    }
+
+    function userUndeposit(uint256 experimentId) external isOpen(experimentId) {
+        Experiment storage experiment = experiments[experimentId];
+        require(
+            deposits[experimentId][msg.sender] > 0,
+            "No deposits to withdraw"
+        );
+
+        uint256 amount = deposits[experimentId][msg.sender];
+        deposits[experimentId][msg.sender] = 0;
+        experiment.totalDeposited -= amount;
+
+        require(token.transfer(msg.sender, amount), "Token transfer failed");
+
+        emit Undeposited(experimentId, msg.sender, amount);
+    }
+
+    function userUnbet(uint256 experimentId) external {
+        Experiment storage experiment = experiments[experimentId];
+        require(
+            block.timestamp >= experiment.experimentCreatedAt + 90 days,
+            "Must wait 90 days"
+        );
+        require(experiment.bettingOutcome == 255, "Result already set");
+
+        uint256 amount0 = bets0[experimentId][msg.sender];
+        uint256 amount1 = bets1[experimentId][msg.sender];
+        uint256 total = amount0 + amount1;
+        require(total > 0, "No bets to withdraw");
+
+        bets0[experimentId][msg.sender] = 0;
+        bets1[experimentId][msg.sender] = 0;
+        experiment.totalBet0 -= amount0;
+        experiment.totalBet1 -= amount1;
+
+        require(token.transfer(msg.sender, total), "Transfer failed");
+
+        emit BetWithdrawn(experimentId, msg.sender, total);
+    }
+
+    function userClaimBetProfit(uint256 experimentId) external {
+        Experiment storage experiment = experiments[experimentId];
+        require(experiment.bettingOutcome != 255, "Result not set");
+
+        uint256 payout;
+        if (experiment.bettingOutcome == 0) {
+            uint256 userBetAmount = bets0[experimentId][msg.sender];
+            require(userBetAmount > 0, "No winning bet");
+            payout =
+                (userBetAmount *
+                    (experiment.totalBet0 + experiment.totalBet1)) /
+                experiment.totalBet0;
+            bets0[experimentId][msg.sender] = 0;
+        } else {
+            uint256 userBetAmount = bets1[experimentId][msg.sender];
+            require(userBetAmount > 0, "No winning bet");
+            payout =
+                (userBetAmount *
+                    (experiment.totalBet0 + experiment.totalBet1)) /
+                experiment.totalBet1;
+            bets1[experimentId][msg.sender] = 0;
+        }
+
+        require(token.transfer(msg.sender, payout), "Transfer failed");
+
+        emit BetProfitClaimed(experimentId, msg.sender, payout);
+    }
+
     // Public Functions
 
     function userDeposit(
@@ -330,7 +335,7 @@ contract CastlabExperiment {
         uint256 amount
     ) public isOpen(experimentId) {
         // Hardcoding decimals for USDC
-        require(amount > 1 * 10 ** 6, "Deposit must be greater than 1 USDC");
+        require(amount > 1 * MIN_AMOUNT, "Deposit must be greater than 1 USDC");
 
         Experiment storage experiment = experiments[experimentId];
 
@@ -354,7 +359,7 @@ contract CastlabExperiment {
         uint8 outcome,
         uint256 amount
     ) public isOpen(experimentId) {
-        require(amount > 1 * 10 ** 6, "Bet must be greater than 1 USDC");
+        require(amount > 1 * MIN_AMOUNT, "Bet must be greater than 1 USDC");
         require(outcome == 0 || outcome == 1, "Invalid outcome");
         Experiment storage experiment = experiments[experimentId];
         require(experiment.bettingOutcome == 255, "Betting closed");
