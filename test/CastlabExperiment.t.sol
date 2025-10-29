@@ -89,7 +89,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userDeposit(experimentId, 100 * 10 ** 6);
 
         // Check total deposited is 225 USDC
-        (, , uint256 totalDeposited, ) = funding.getExperimentInfo(
+        (, , uint256 totalDeposited, , , , , ) = funding.getExperimentInfo(
             experimentId
         );
         assertEq(totalDeposited, 225 * 10 ** 6);
@@ -99,10 +99,16 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user2);
         funding.userUndeposit(experimentId);
         assertEq(token.balanceOf(user2), user2BalanceBefore + 75 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user2), 0);
+        (uint256 depositAmount2, , ) = funding.getUserPosition(
+            experimentId,
+            user2
+        );
+        assertEq(depositAmount2, 0);
 
         // Check total deposited is now 150 USDC
-        (, , totalDeposited, ) = funding.getExperimentInfo(experimentId);
+        (, , totalDeposited, , , , , ) = funding.getExperimentInfo(
+            experimentId
+        );
         assertEq(totalDeposited, 150 * 10 ** 6);
 
         // Admin returns remaining funds to user1 and user3
@@ -124,11 +130,21 @@ contract CastlabExperimentNewTest is Test {
 
         // Verify experiment is closed and deposits are cleared
         bool open;
-        (, , totalDeposited, open) = funding.getExperimentInfo(experimentId);
+        (, , totalDeposited, , , , , open) = funding.getExperimentInfo(
+            experimentId
+        );
         assertEq(totalDeposited, 0);
         assertFalse(open);
-        assertEq(funding.getUserDeposit(experimentId, user1), 0);
-        assertEq(funding.getUserDeposit(experimentId, user3), 0);
+        (uint256 depositAmount1, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount1, 0);
+        (uint256 depositAmount3, , ) = funding.getUserPosition(
+            experimentId,
+            user3
+        );
+        assertEq(depositAmount3, 0);
     }
 
     function testDepositUndepositRedepositPastMinCostAdminCloses() public {
@@ -146,20 +162,32 @@ contract CastlabExperimentNewTest is Test {
         // User1 deposits 60 USDC
         vm.prank(user1);
         funding.userDeposit(experimentId, 60 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 60 * 10 ** 6);
+        (uint256 depositAmount1, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount1, 60 * 10 ** 6);
 
         // User1 undeposits the 60 USDC
         vm.prank(user1);
         funding.userUndeposit(experimentId);
-        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+        (uint256 depositAmount2, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount2, 0);
 
         // User1 redeposits 150 USDC (past minCost)
         vm.prank(user1);
         funding.userDeposit(experimentId, 150 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 150 * 10 ** 6);
+        (uint256 depositAmount3, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount3, 150 * 10 ** 6);
 
         // Verify total is past minCost
-        (uint256 costMin, , uint256 totalDeposited, ) = funding
+        (uint256 costMin, , uint256 totalDeposited, , , , , ) = funding
             .getExperimentInfo(experimentId);
         assertEq(totalDeposited, 150 * 10 ** 6);
         assertTrue(totalDeposited >= costMin);
@@ -172,17 +200,19 @@ contract CastlabExperimentNewTest is Test {
 
         // Verify experiment is closed
         bool open;
-        (, , totalDeposited, open) = funding.getExperimentInfo(experimentId);
+        (, , totalDeposited, , , , , open) = funding.getExperimentInfo(
+            experimentId
+        );
         assertEq(totalDeposited, 0);
         assertFalse(open);
 
         // User1 tries to undeposit but should fail because experiment is closed
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userUndeposit(experimentId);
 
         // User1 also can't deposit anymore
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userDeposit(experimentId, 10 * 10 ** 6);
     }
@@ -199,20 +229,19 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
 
-        // Try to deposit exactly 1 USDC (1 * 10^6) - should fail
-        vm.expectRevert("Deposit must be greater than 1 USDC");
-        vm.prank(user1);
-        funding.userDeposit(experimentId, 1 * 10 ** 6);
-
         // Try to deposit 0.5 USDC - should fail
-        vm.expectRevert("Deposit must be greater than 1 USDC");
+        vm.expectRevert(DepositBelowMinimum.selector);
         vm.prank(user1);
         funding.userDeposit(experimentId, 0.5 * 10 ** 6);
 
-        // Deposit 1.1 USDC - should succeed
+        // Deposit 1 USDC - should succeed
         vm.prank(user1);
-        funding.userDeposit(experimentId, 1.1 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 1.1 * 10 ** 6);
+        funding.userDeposit(experimentId, 1 * 10 ** 6);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 1 * 10 ** 6);
     }
 
     function testCannotExceedMaxCost() public {
@@ -232,7 +261,7 @@ contract CastlabExperimentNewTest is Test {
         // User2 tries to deposit 60 USDC (would exceed max)
         vm.prank(user2);
         token.approve(address(funding), INITIAL_BALANCE);
-        vm.expectRevert("Deposit would exceed maximum cost");
+        vm.expectRevert(DepositExceedsMaxCost.selector);
         vm.prank(user2);
         funding.userDeposit(experimentId, 60 * 10 ** 6);
 
@@ -240,7 +269,7 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user2);
         funding.userDeposit(experimentId, 50 * 10 ** 6);
 
-        (, , uint256 totalDeposited, ) = funding.getExperimentInfo(
+        (, , uint256 totalDeposited, , , , , ) = funding.getExperimentInfo(
             experimentId
         );
         assertEq(totalDeposited, 200 * 10 ** 6);
@@ -248,7 +277,7 @@ contract CastlabExperimentNewTest is Test {
 
     function testOnlyAdminCanCreateExperiment() public {
         // User1 tries to create experiment - should fail
-        vm.expectRevert("Only admin or admin_dev can call this function");
+        vm.expectRevert(OnlyAdminOrAdminDev.selector);
         vm.prank(user1);
         funding.adminCreateExperiment(100 * 10 ** 6, 500 * 10 ** 6);
 
@@ -284,7 +313,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userDeposit(experimentId, 50 * 10 ** 6);
 
         // Admin tries to withdraw - should fail
-        vm.expectRevert("Minimum cost has not been reached");
+        vm.expectRevert(MinCostNotReached.selector);
         vm.prank(admin);
         funding.adminWithdraw(experimentId);
 
@@ -298,9 +327,8 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(admin);
         funding.adminWithdraw(experimentId);
 
-        (, , uint256 totalDeposited, bool open) = funding.getExperimentInfo(
-            experimentId
-        );
+        (, , uint256 totalDeposited, , , , , bool open) = funding
+            .getExperimentInfo(experimentId);
         assertEq(totalDeposited, 0);
         assertFalse(open);
     }
@@ -357,7 +385,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userDeposit(experimentId, 50 * 10 ** 6);
 
         // Admin tries to close with funds still in - should fail
-        vm.expectRevert("Must return all deposits first");
+        vm.expectRevert(MustReturnAllDepositsFirst.selector);
         vm.prank(admin);
         funding.adminClose(experimentId);
 
@@ -369,9 +397,8 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(admin);
         funding.adminClose(experimentId);
 
-        (, , uint256 totalDeposited, bool open) = funding.getExperimentInfo(
-            experimentId
-        );
+        (, , uint256 totalDeposited, , , , , bool open) = funding
+            .getExperimentInfo(experimentId);
         assertEq(totalDeposited, 0);
         assertFalse(open);
     }
@@ -382,29 +409,29 @@ contract CastlabExperimentNewTest is Test {
         // User tries to deposit to non-existent experiment
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userDeposit(nonExistentId, 50 * 10 ** 6);
 
         // User tries to undeposit from non-existent experiment
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userUndeposit(nonExistentId);
 
         // Admin tries to withdraw from non-existent experiment
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(admin);
         funding.adminWithdraw(nonExistentId);
 
         // Admin tries to close non-existent experiment
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(admin);
         funding.adminClose(nonExistentId);
 
         // Admin tries to return funds from non-existent experiment
         address[] memory depositors = new address[](1);
         depositors[0] = user1;
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(admin);
         funding.adminRefund(nonExistentId, depositors);
     }
@@ -424,7 +451,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userDeposit(experimentId, 150 * 10 ** 6);
 
         // admin_dev can NOT withdraw (only admin)
-        vm.expectRevert("Only admin can call this function");
+        vm.expectRevert(OnlyAdmin.selector);
         vm.prank(admin2);
         funding.adminWithdraw(experimentId);
 
@@ -464,20 +491,32 @@ contract CastlabExperimentNewTest is Test {
         // First deposit: 30 USDC
         vm.prank(user1);
         funding.userDeposit(experimentId, 30 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 30 * 10 ** 6);
+        (uint256 depositAmount1, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount1, 30 * 10 ** 6);
 
         // Second deposit: 25 USDC (total: 55)
         vm.prank(user1);
         funding.userDeposit(experimentId, 25 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 55 * 10 ** 6);
+        (uint256 depositAmount2, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount2, 55 * 10 ** 6);
 
         // Third deposit: 45 USDC (total: 100)
         vm.prank(user1);
         funding.userDeposit(experimentId, 45 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 100 * 10 ** 6);
+        (uint256 depositAmount3, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount3, 100 * 10 ** 6);
 
         // Verify total deposited
-        (, , uint256 totalDeposited, ) = funding.getExperimentInfo(
+        (, , uint256 totalDeposited, , , , , ) = funding.getExperimentInfo(
             experimentId
         );
         assertEq(totalDeposited, 100 * 10 ** 6);
@@ -487,7 +526,11 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         funding.userUndeposit(experimentId);
         assertEq(token.balanceOf(user1), balanceBefore + 100 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 0);
     }
 
     function testAdminReturnWithZeroDeposits() public {
@@ -527,9 +570,21 @@ contract CastlabExperimentNewTest is Test {
         assertEq(token.balanceOf(user3), user3BalanceBefore); // No change
 
         // All deposits cleared
-        assertEq(funding.getUserDeposit(experimentId, user1), 0);
-        assertEq(funding.getUserDeposit(experimentId, user2), 0);
-        assertEq(funding.getUserDeposit(experimentId, user3), 0);
+        (uint256 depositAmount1, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount1, 0);
+        (uint256 depositAmount2, , ) = funding.getUserPosition(
+            experimentId,
+            user2
+        );
+        assertEq(depositAmount2, 0);
+        (uint256 depositAmount3, , ) = funding.getUserPosition(
+            experimentId,
+            user3
+        );
+        assertEq(depositAmount3, 0);
     }
 
     function testUserActionsAfterAdminWithdraw() public {
@@ -555,28 +610,35 @@ contract CastlabExperimentNewTest is Test {
         funding.adminWithdraw(experimentId);
 
         // Verify experiment is closed
-        (, , uint256 totalDeposited, bool open) = funding.getExperimentInfo(
-            experimentId
-        );
+        (, , uint256 totalDeposited, , , , , bool open) = funding
+            .getExperimentInfo(experimentId);
         assertEq(totalDeposited, 0);
         assertFalse(open);
 
         // IMPORTANT: User deposits are preserved for NFT claims
-        assertEq(funding.getUserDeposit(experimentId, user1), 60 * 10 ** 6);
-        assertEq(funding.getUserDeposit(experimentId, user2), 80 * 10 ** 6);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 60 * 10 ** 6);
+        (uint256 depositAmount2, , ) = funding.getUserPosition(
+            experimentId,
+            user2
+        );
+        assertEq(depositAmount2, 80 * 10 ** 6);
 
         // Users cannot undeposit (experiment closed)
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userUndeposit(experimentId);
 
         // Users cannot deposit more (experiment closed)
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userDeposit(experimentId, 10 * 10 ** 6);
 
         // Admin cannot withdraw again (experiment closed)
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(admin);
         funding.adminWithdraw(experimentId);
     }
@@ -619,36 +681,15 @@ contract CastlabExperimentNewTest is Test {
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
 
-        // Try to bet exactly 1 USDC - should fail
-        vm.expectRevert("Bet on outcome 0 must be 0 or greater than 1 USDC");
-        vm.prank(user1);
-        funding.userBet(experimentId, 1 * 10 ** 6, 0);
-
         // Try to bet 0.5 USDC - should fail
-        vm.expectRevert("Bet on outcome 0 must be 0 or greater than 1 USDC");
+        vm.expectRevert(BetBelowMinimum.selector);
         vm.prank(user1);
         funding.userBet(experimentId, 0.5 * 10 ** 6, 0);
 
         // Bet 1.1 USDC - should succeed
         vm.prank(user1);
-        funding.userBet(experimentId, 1.1 * 10 ** 6, 0);
-        assertEq(funding.bets0(experimentId, user1), 1.1 * 10 ** 6);
-    }
-
-    function testCannotBetOnInvalidOutcome() public {
-        vm.prank(admin);
-        uint256 experimentId = funding.adminCreateExperiment(
-            100 * 10 ** 6,
-            500 * 10 ** 6
-        );
-
-        vm.prank(user1);
-        token.approve(address(funding), INITIAL_BALANCE);
-
-        // Try to bet with no amount on either side - should fail
-        vm.expectRevert("Must bet on at least one outcome");
-        vm.prank(user1);
-        funding.userBet(experimentId, 0, 0);
+        funding.userBet(experimentId, 1 * 10 ** 6, 0);
+        assertEq(funding.bets0(experimentId, user1), 1 * 10 ** 6);
     }
 
     function testMultipleBetsFromSameUser() public {
@@ -800,7 +841,7 @@ contract CastlabExperimentNewTest is Test {
         assertEq(token.balanceOf(user2), user2BalanceBefore + 80 * 10 ** 6);
 
         // User3 cannot claim (losing side)
-        vm.expectRevert("No winning bet");
+        vm.expectRevert(NoWinningBet.selector);
         vm.prank(user3);
         funding.userClaimBetProfit(experimentId);
     }
@@ -838,7 +879,7 @@ contract CastlabExperimentNewTest is Test {
         funding.adminSetResult(experimentId, 0);
 
         // Try to set result again - should fail
-        vm.expectRevert("Result already set");
+        vm.expectRevert(ResultAlreadySet.selector);
         vm.prank(admin);
         funding.adminSetResult(experimentId, 1);
     }
@@ -867,29 +908,11 @@ contract CastlabExperimentNewTest is Test {
         funding.adminWithdraw(experimentId);
 
         // Admin tries to set result to 1 (but no one bet on side 1) - should fail
-        vm.expectRevert("Winning side has no bets");
+        vm.expectRevert(WinningSideHasNoBets.selector);
         vm.prank(admin);
         funding.adminSetResult(experimentId, 1);
 
         // Admin sets result to 0 - should succeed
-        vm.prank(admin);
-        funding.adminSetResult(experimentId, 0);
-    }
-
-    function testCannotSetResultWithNoBets() public {
-        vm.prank(admin);
-        uint256 experimentId = funding.adminCreateExperiment(
-            100 * 10 ** 6,
-            500 * 10 ** 6
-        );
-
-        // No bets placed
-        // Close the experiment (no deposits or bets to return)
-        vm.prank(admin);
-        funding.adminClose(experimentId);
-
-        // Admin tries to set result - should fail
-        vm.expectRevert("No bets placed");
         vm.prank(admin);
         funding.adminSetResult(experimentId, 0);
     }
@@ -929,7 +952,7 @@ contract CastlabExperimentNewTest is Test {
         // User3 tries to bet - should fail (experiment is closed)
         vm.prank(user3);
         token.approve(address(funding), INITIAL_BALANCE);
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user3);
         funding.userBet(experimentId, 30 * 10 ** 6, 0);
     }
@@ -948,7 +971,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userBet(experimentId, 50 * 10 ** 6, 0);
 
         // User1 tries to claim before result set - should fail
-        vm.expectRevert("Result not set");
+        vm.expectRevert(ResultNotSet.selector);
         vm.prank(user1);
         funding.userClaimBetProfit(experimentId);
     }
@@ -991,12 +1014,12 @@ contract CastlabExperimentNewTest is Test {
         funding.userClaimBetProfit(experimentId);
 
         // User1 tries to claim again - should fail
-        vm.expectRevert("No winning bet");
+        vm.expectRevert(NoWinningBet.selector);
         vm.prank(user1);
         funding.userClaimBetProfit(experimentId);
     }
 
-    function testUserUnbetAfter90Days() public {
+    function testUserUnbetAfter60Days() public {
         vm.prank(admin);
         uint256 experimentId = funding.adminCreateExperiment(
             100 * 10 ** 6,
@@ -1012,12 +1035,12 @@ contract CastlabExperimentNewTest is Test {
         funding.userBet(experimentId, 0, 30 * 10 ** 6);
 
         // Try to unbet before 30 days - should fail
-        vm.expectRevert("Must wait 90 days");
+        vm.expectRevert(MustWait60Days.selector);
         vm.prank(user1);
         funding.userUnbet(experimentId);
 
-        // Fast forward 90 days
-        vm.warp(block.timestamp + 90 days);
+        // Fast forward 60 days
+        vm.warp(block.timestamp + 60 days);
 
         // Now user can unbet
         uint256 user1BalanceBefore = token.balanceOf(user1);
@@ -1065,10 +1088,10 @@ contract CastlabExperimentNewTest is Test {
         funding.adminSetResult(experimentId, 0);
 
         // Fast forward 30 days
-        vm.warp(block.timestamp + 90 days);
+        vm.warp(block.timestamp + 60 days);
 
         // User tries to unbet - should fail because result is set
-        vm.expectRevert("Result already set");
+        vm.expectRevert(ResultAlreadySet.selector);
         vm.prank(user1);
         funding.userUnbet(experimentId);
     }
@@ -1162,7 +1185,7 @@ contract CastlabExperimentNewTest is Test {
         funding.userDeposit(experimentId, 50 * 10 ** 6);
 
         // Try to close market with deposits still active - should fail
-        vm.expectRevert("Must return all deposits first");
+        vm.expectRevert(MustReturnAllDepositsFirst.selector);
         vm.prank(admin);
         funding.adminClose(experimentId);
 
@@ -1204,12 +1227,12 @@ contract CastlabExperimentNewTest is Test {
         funding.adminWithdraw(experimentId);
 
         // admin_dev tries to set result - should fail
-        vm.expectRevert("Only admin can call this function");
+        vm.expectRevert(OnlyAdmin.selector);
         vm.prank(admin2);
         funding.adminSetResult(experimentId, 0);
 
         // Regular user tries to set result - should fail
-        vm.expectRevert("Only admin can call this function");
+        vm.expectRevert(OnlyAdmin.selector);
         vm.prank(user1);
         funding.adminSetResult(experimentId, 0);
 
@@ -1231,7 +1254,7 @@ contract CastlabExperimentNewTest is Test {
         funding.adminClose(experimentId1);
 
         // Verify it's closed
-        (, , , bool open1) = funding.getExperimentInfo(experimentId1);
+        (, , , , , , , bool open1) = funding.getExperimentInfo(experimentId1);
         assertFalse(open1);
 
         // Create second experiment for admin to close
@@ -1246,7 +1269,7 @@ contract CastlabExperimentNewTest is Test {
         funding.adminClose(experimentId2);
 
         // Verify it's closed
-        (, , , bool open2) = funding.getExperimentInfo(experimentId2);
+        (, , , , , , , bool open2) = funding.getExperimentInfo(experimentId2);
         assertFalse(open2);
 
         // Create third experiment for regular user test
@@ -1257,7 +1280,7 @@ contract CastlabExperimentNewTest is Test {
         );
 
         // Regular user cannot close market - should fail
-        vm.expectRevert("Only admin or admin_dev can call this function");
+        vm.expectRevert(OnlyAdminOrAdminDev.selector);
         vm.prank(user1);
         funding.adminClose(experimentId3);
     }
@@ -1281,7 +1304,11 @@ contract CastlabExperimentNewTest is Test {
         );
 
         // Verify both deposit and bet were recorded
-        assertEq(funding.getUserDeposit(experimentId, user1), 50 * 10 ** 6);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 50 * 10 ** 6);
         assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
     }
 
@@ -1304,7 +1331,11 @@ contract CastlabExperimentNewTest is Test {
         );
 
         // Verify only bet was recorded
-        assertEq(funding.getUserDeposit(experimentId, user1), 0);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 0);
         assertEq(funding.bets0(experimentId, user1), 30 * 10 ** 6);
     }
 
@@ -1327,7 +1358,11 @@ contract CastlabExperimentNewTest is Test {
         );
 
         // Verify only deposit was recorded
-        assertEq(funding.getUserDeposit(experimentId, user1), 50 * 10 ** 6);
+        (uint256 depositAmount, , ) = funding.getUserPosition(
+            experimentId,
+            user1
+        );
+        assertEq(depositAmount, 50 * 10 ** 6);
         assertEq(funding.bets0(experimentId, user1), 0);
     }
 
@@ -1345,7 +1380,7 @@ contract CastlabExperimentNewTest is Test {
         // Try to bet on closed experiment - should fail
         vm.prank(user1);
         token.approve(address(funding), INITIAL_BALANCE);
-        vm.expectRevert("Experiment is closed");
+        vm.expectRevert(ExperimentClosed.selector);
         vm.prank(user1);
         funding.userBet(experimentId, 50 * 10 ** 6, 0);
     }
