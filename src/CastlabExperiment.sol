@@ -60,7 +60,7 @@ contract CastlabExperiment is ICastLabExperiment {
         newExperiment.totalDeposited = 0;
         newExperiment.totalBet0 = 0;
         newExperiment.totalBet1 = 0;
-        newExperiment.bettingOutcome = 255;
+        newExperiment.bettingOutcome = type(uint8).max;
         newExperiment.experimentCreatedAt = block.timestamp;
         newExperiment.open = true;
 
@@ -122,9 +122,9 @@ contract CastlabExperiment is ICastLabExperiment {
         Experiment storage experiment = experiments[experimentId];
         
         // These two constraints ensure it was a real experiment (only created
-        // experiments will have bettingOutcome == 255, and is closed for betting)
+        // experiments will have bettingOutcome == type(uint8).max, and is closed for betting)
         require(!experiment.open, ExperimentNotClosed());
-        require(experiment.bettingOutcome == 255, ResultAlreadySet());
+        require(experiment.bettingOutcome == type(uint8).max, ResultAlreadySet());
 
         // If winning side has no bets - we should refund everyone
         if (result == 0) {
@@ -160,14 +160,14 @@ contract CastlabExperiment is ICastLabExperiment {
     function userUnbet(uint256 experimentId) external {
         Experiment storage experiment = experiments[experimentId];
         require(block.timestamp >= experiment.experimentCreatedAt + 60 days, MustWait60Days());
-        require(experiment.bettingOutcome == 255, ResultAlreadySet());
+        require(experiment.bettingOutcome == type(uint8).max, ResultAlreadySet());
 
         _returnBet(experimentId, msg.sender);
     }
 
     function userClaimBetProfit(uint256 experimentId) external returns (uint256) {
         Experiment storage experiment = experiments[experimentId];
-        require(experiment.bettingOutcome != 255, ResultNotSet());
+        require(experiment.bettingOutcome != type(uint8).max, ResultNotSet());
 
         uint256 payout;
         if (experiment.bettingOutcome == 0) {
