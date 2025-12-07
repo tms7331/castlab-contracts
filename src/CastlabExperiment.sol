@@ -201,13 +201,13 @@ contract CastlabExperiment is ICastLabExperiment {
     )
         external
         view
-        returns (
-            uint256 depositAmount,
-            uint256 betAmount0,
-            uint256 betAmount1
-        )
+        returns (uint256 depositAmount, uint256 betAmount0, uint256 betAmount1)
     {
-        return (deposits[experimentId][user], bets0[experimentId][user], bets1[experimentId][user]);
+        return (
+            deposits[experimentId][user],
+            bets0[experimentId][user],
+            bets1[experimentId][user]
+        );
     }
 
     function getUserExperiments(address user)
