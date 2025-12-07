@@ -74,10 +74,24 @@ interface ICastLabExperiment {
     }
 
     // === Functions ===
+
+    // Admin
     function adminCreateExperiment(uint256 costMin, uint256 costMax) external returns (uint256);
     function adminWithdraw(uint256 experimentId) external;
     function adminClose(uint256 experimentId) external;
     function adminRefund(uint256 experimentId, address[] calldata depositors) external;
     function adminReturnBet(uint256 experimentId, address[] calldata users) external;
     function adminSetResult(uint256 experimentId, uint8 result) external;
+
+    // User
+    function userDeposit(uint256 experimentId, uint256 amount) external;
+    function userBet(uint256 experimentId, uint256 betAmount0, uint256 betAmount1) external;
+    function userUndeposit(uint256 experimentId) external;
+    function userUnbet(uint256 experimentId) external;
+    function userClaimBetProfit(uint256 experimentId) external returns (uint256);
+
+    // View
+    function getExperimentInfo(uint256 experimentId) external view returns (Experiment memory);
+    function getUserPosition(uint256 experimentId, address user) external view returns (uint256 depositAmount, uint256 betAmount0, uint256 betAmount1);
+    function getUserExperiments(address user) external view returns (uint256[] memory experimentIds, uint256[] memory depositAmounts);
 }
