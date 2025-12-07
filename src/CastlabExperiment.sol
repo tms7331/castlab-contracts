@@ -94,27 +94,25 @@ contract CastlabExperiment {
     event AdminClose(uint256 indexed experimentId);
 
     modifier onlyAdmin() {
-        if (msg.sender != ADMIN) revert OnlyAdmin();
+        require(msg.sender == ADMIN, OnlyAdmin());
         _;
     }
 
     modifier onlyAdminPlusDev() {
-        if (msg.sender != ADMIN && msg.sender != ADMIN_DEV)
-            revert OnlyAdminOrAdminDev();
+        require(msg.sender == ADMIN || msg.sender == ADMIN_DEV, OnlyAdminOrAdminDev());
         _;
     }
 
     modifier isOpen(uint256 experimentId) {
         // experimentId >= nextExperimentId is mostly unnecessary but doesn't hurt -
-        if (experimentId >= nextExperimentId || !experiments[experimentId].open)
-            revert ExperimentClosed();
+        require(experimentId < nextExperimentId && experiments[experimentId].open, ExperimentClosed());
         _;
     }
 
     constructor(address _admin, address _adminDev, address _token) {
-        if (_admin == address(0)) revert ZeroAddress();
-        if (_adminDev == address(0)) revert ZeroAddress();
-        if (_token == address(0)) revert ZeroAddress();
+        require(_admin != address(0), ZeroAddress());
+        require(_adminDev != address(0), ZeroAddress());
+        require(_token != address(0), ZeroAddress());
         ADMIN = _admin;
         ADMIN_DEV = _adminDev;
         TOKEN = IERC20(_token);
@@ -127,8 +125,8 @@ contract CastlabExperiment {
         uint256 costMin,
         uint256 costMax
     ) external onlyAdminPlusDev returns (uint256) {
-        if (costMin < MIN_AMOUNT) revert MinCostTooLow();
-        if (costMax < costMin) revert MaxCostBelowMinCost();
+        require(costMin >= MIN_AMOUNT, MinCostTooLow());
+        require(costMax >= costMin, MaxCostBelowMinCost());
 
         uint256 experimentId = nextExperimentId++;
         Experiment storage newExperiment = experiments[experimentId];
@@ -149,13 +147,12 @@ contract CastlabExperiment {
         uint256 experimentId
     ) external onlyAdmin isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
-        if (experiment.totalDeposited < experiment.costMin)
-            revert MinCostNotReached();
+        require(experiment.totalDeposited >= experiment.costMin, MinCostNotReached());
 
         uint256 amount = experiment.totalDeposited;
         experiment.totalDeposited = 0;
         experiment.open = false;
-        if (!TOKEN.transfer(ADMIN, amount)) revert TokenTransferFailed();
+        require(TOKEN.transfer(ADMIN, amount), TokenTransferFailed());
 
         emit AdminWithdraw(experimentId, amount);
     }
@@ -163,9 +160,8 @@ contract CastlabExperiment {
         uint256 experimentId
     ) external onlyAdminPlusDev isOpen(experimentId) {
         Experiment storage experiment = experiments[experimentId];
-        if (experiment.totalDeposited != 0) revert MustReturnAllDepositsFirst();
-        if (experiment.totalBet0 != 0 || experiment.totalBet1 != 0)
-            revert MustReturnAllBetsFirst();
+        require(experiment.totalDeposited == 0, MustReturnAllDepositsFirst());
+        require(experiment.totalBet0 == 0 && experiment.totalBet1 == 0, MustReturnAllBetsFirst());
 
         experiment.open = false;
         emit AdminClose(experimentId);
@@ -194,19 +190,19 @@ contract CastlabExperiment {
         uint256 experimentId,
         uint8 result
     ) external onlyAdmin {
-        if (result != 0 && result != 1) revert InvalidResult();
+        require(result == 0 || result == 1, InvalidResult());
 
         Experiment storage experiment = experiments[experimentId];
         // These two constraints ensure it was a real experiment (only created
         // experiments will have bettingOutcome == 255, and is closed for betting)
-        if (experiment.open) revert ExperimentNotClosed();
-        if (experiment.bettingOutcome != 255) revert ResultAlreadySet();
+        require(!experiment.open, ExperimentNotClosed());
+        require(experiment.bettingOutcome == 255, ResultAlreadySet());
 
         // If winning side has no bets - we should refund everyone
         if (result == 0) {
-            if (experiment.totalBet0 == 0) revert WinningSideHasNoBets();
+            require(experiment.totalBet0 != 0, WinningSideHasNoBets());
         } else {
-            if (experiment.totalBet1 == 0) revert WinningSideHasNoBets();
+            require(experiment.totalBet1 != 0, WinningSideHasNoBets());
         }
 
         experiment.bettingOutcome = result;
@@ -234,9 +230,8 @@ contract CastlabExperiment {
 
     function userUnbet(uint256 experimentId) external {
         Experiment storage experiment = experiments[experimentId];
-        if (block.timestamp < experiment.experimentCreatedAt + 60 days)
-            revert MustWait60Days();
-        if (experiment.bettingOutcome != 255) revert ResultAlreadySet();
+        require(block.timestamp >= experiment.experimentCreatedAt + 60 days, MustWait60Days());
+        require(experiment.bettingOutcome == 255, ResultAlreadySet());
 
         _returnBet(experimentId, msg.sender);
     }
@@ -245,12 +240,12 @@ contract CastlabExperiment {
         uint256 experimentId
     ) external returns (uint256) {
         Experiment storage experiment = experiments[experimentId];
-        if (experiment.bettingOutcome == 255) revert ResultNotSet();
+        require(experiment.bettingOutcome != 255, ResultNotSet());
 
         uint256 payout;
         if (experiment.bettingOutcome == 0) {
             uint256 userBetAmount = bets0[experimentId][msg.sender];
-            if (userBetAmount == 0) revert NoWinningBet();
+            require(userBetAmount != 0, NoWinningBet());
             payout =
                 (userBetAmount *
                     (experiment.totalBet0 + experiment.totalBet1)) /
@@ -258,7 +253,7 @@ contract CastlabExperiment {
             bets0[experimentId][msg.sender] = 0;
         } else {
             uint256 userBetAmount = bets1[experimentId][msg.sender];
-            if (userBetAmount == 0) revert NoWinningBet();
+            require(userBetAmount != 0, NoWinningBet());
             payout =
                 (userBetAmount *
                     (experiment.totalBet0 + experiment.totalBet1)) /
@@ -266,7 +261,7 @@ contract CastlabExperiment {
             bets1[experimentId][msg.sender] = 0;
         }
 
-        if (!TOKEN.transfer(msg.sender, payout)) revert TokenTransferFailed();
+        require(TOKEN.transfer(msg.sender, payout), TokenTransferFailed());
 
         emit BetProfitClaimed(experimentId, msg.sender, payout);
 
@@ -359,15 +354,13 @@ contract CastlabExperiment {
         uint256 experimentId,
         uint256 amount
     ) public isOpen(experimentId) {
-        if (amount < MIN_AMOUNT) revert DepositBelowMinimum();
+        require(amount >= MIN_AMOUNT, DepositBelowMinimum());
 
         Experiment storage experiment = experiments[experimentId];
 
-        if (experiment.totalDeposited + amount > experiment.costMax)
-            revert DepositExceedsMaxCost();
+        require(experiment.totalDeposited + amount <= experiment.costMax, DepositExceedsMaxCost());
 
-        if (!TOKEN.transferFrom(msg.sender, address(this), amount))
-            revert TokenTransferFailed();
+        require(TOKEN.transferFrom(msg.sender, address(this), amount), TokenTransferFailed());
 
         deposits[experimentId][msg.sender] += amount;
         experiment.totalDeposited += amount;
@@ -383,18 +376,17 @@ contract CastlabExperiment {
         Experiment storage experiment = experiments[experimentId];
         uint256 totalAmount = betAmount0 + betAmount1;
 
-        if (!TOKEN.transferFrom(msg.sender, address(this), totalAmount))
-            revert TokenTransferFailed();
+        require(TOKEN.transferFrom(msg.sender, address(this), totalAmount), TokenTransferFailed());
 
         if (betAmount0 > 0) {
-            if (betAmount0 < MIN_AMOUNT) revert BetBelowMinimum();
+            require(betAmount0 >= MIN_AMOUNT, BetBelowMinimum());
             bets0[experimentId][msg.sender] += betAmount0;
             experiment.totalBet0 += betAmount0;
             emit BetPlaced(experimentId, msg.sender, 0, betAmount0);
         }
 
         if (betAmount1 > 0) {
-            if (betAmount1 < MIN_AMOUNT) revert BetBelowMinimum();
+            require(betAmount1 >= MIN_AMOUNT, BetBelowMinimum());
             bets1[experimentId][msg.sender] += betAmount1;
             experiment.totalBet1 += betAmount1;
             emit BetPlaced(experimentId, msg.sender, 1, betAmount1);
@@ -410,7 +402,7 @@ contract CastlabExperiment {
         if (amount > 0) {
             deposits[experimentId][user] = 0;
             experiment.totalDeposited -= amount;
-            if (!TOKEN.transfer(user, amount)) revert TokenTransferFailed();
+            require(TOKEN.transfer(user, amount), TokenTransferFailed());
         }
         emit Undeposited(experimentId, user, amount);
     }
@@ -426,7 +418,7 @@ contract CastlabExperiment {
             bets1[experimentId][user] = 0;
             experiment.totalBet0 -= amount0;
             experiment.totalBet1 -= amount1;
-            if (!TOKEN.transfer(user, total)) revert TokenTransferFailed();
+            require(TOKEN.transfer(user, total), TokenTransferFailed());
         }
         emit BetReturned(experimentId, user, total);
     }
