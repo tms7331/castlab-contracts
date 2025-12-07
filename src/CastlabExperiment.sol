@@ -201,7 +201,11 @@ contract CastlabExperiment is ICastLabExperiment {
     )
         external
         view
-        returns (uint256 depositAmount, uint256 betAmount0, uint256 betAmount1)
+        returns (
+            uint256 depositAmount,
+            uint256 betAmount0,
+            uint256 betAmount1
+        )
     {
         return (deposits[experimentId][user], bets0[experimentId][user], bets1[experimentId][user]);
     }
@@ -209,7 +213,10 @@ contract CastlabExperiment is ICastLabExperiment {
     function getUserExperiments(address user)
         external
         view
-        returns (uint256[] memory experimentIds, uint256[] memory depositAmounts)
+        returns (
+            uint256[] memory experimentIds,
+            uint256[] memory depositAmounts
+        )
     {
         // First, count how many experiments the user has deposited to
         uint256 count = 0;
