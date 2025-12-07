@@ -2,17 +2,43 @@
 pragma solidity 0.8.30;
 
 interface ICastLabExperiment {
-    event ExperimentCreated(uint256 indexed experimentId, uint256 costMin, uint256 costMax);
-    event Deposited(uint256 indexed experimentId, address indexed depositor, uint256 amount);
-    event Undeposited(uint256 indexed experimentId, address indexed depositor, uint256 amount);
-    event BetPlaced(uint256 indexed experimentId, address indexed bettor, uint8 outcome, uint256 amount);
-    event BetReturned(uint256 indexed experimentId, address indexed bettor, uint256 amount);
-    event BetProfitClaimed(uint256 indexed experimentId, address indexed winner, uint256 payout);
+    // === Events ===
+    event ExperimentCreated(
+        uint256 indexed experimentId,
+        uint256 costMin,
+        uint256 costMax
+    );
+    event Deposited(
+        uint256 indexed experimentId,
+        address indexed depositor,
+        uint256 amount
+    );
+    event Undeposited(
+        uint256 indexed experimentId,
+        address indexed depositor,
+        uint256 amount
+    );
+    event BetPlaced(
+        uint256 indexed experimentId,
+        address indexed bettor,
+        uint8 outcome,
+        uint256 amount
+    );
+    event BetReturned(
+        uint256 indexed experimentId,
+        address indexed bettor,
+        uint256 amount
+    );
+    event BetProfitClaimed(
+        uint256 indexed experimentId,
+        address indexed winner,
+        uint256 payout
+    );
     event ResultSet(uint256 indexed experimentId, uint8 result);
     event AdminWithdraw(uint256 indexed experimentId, uint256 amount);
     event AdminClose(uint256 indexed experimentId);
 
-
+    // === Errors ===
     error OnlyAdmin();
     error OnlyAdminOrAdminDev();
     error ExperimentClosed();
@@ -35,6 +61,7 @@ interface ICastLabExperiment {
     error BettingClosed();
     error BetBelowMinimum();
 
+    // === Data ===
     struct Experiment {
         uint256 costMin;
         uint256 costMax;
@@ -46,6 +73,7 @@ interface ICastLabExperiment {
         bool open;
     }
 
+    // === Functions ===
     function adminCreateExperiment(uint256 costMin, uint256 costMax) external returns (uint256);
     function adminWithdraw(uint256 experimentId) external;
     function adminClose(uint256 experimentId) external;
