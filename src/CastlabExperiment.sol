@@ -47,7 +47,7 @@ contract CastlabExperiment is ICastLabExperiment {
     // External Functions
 
     function adminCreateExperiment(
-        uint256 costMin, 
+        uint256 costMin,
         uint256 costMax
     ) external onlyAdminPlusDev returns (uint256) {
         require(costMin >= MIN_AMOUNT, MinCostTooLow());
@@ -114,7 +114,7 @@ contract CastlabExperiment is ICastLabExperiment {
     }
 
     function adminSetResult(
-        uint256 experimentId, 
+        uint256 experimentId,
         uint8 result
     ) external onlyAdmin {
         require(result == 0 || result == 1, InvalidResult());
