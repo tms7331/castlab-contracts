@@ -14,7 +14,7 @@ contract CastlabExperimentNewTest is Test {
     address public user2 = address(0x4);
     address public user3 = address(0x5);
 
-    uint256 constant INITIAL_BALANCE = 10000e6; // 10,000 USDC (6 decimals)
+    uint256 constant INITIAL_BALANCE = 10_000e6; // 10,000 USDC (6 decimals)
 
     function setUp() public {
         address tokenAdmin1 = 0x4611F6d137d1baf545378dD02C1b16eb63cbE755;
